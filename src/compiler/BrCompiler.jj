@@ -1,0 +1,101 @@
+/**
+ * JavaCC template file created by SF JavaCC plugin 1.5.28+ wizard for JavaCC 1.5.0+
+ */
+options
+{
+  static = true;
+}
+
+PARSER_BEGIN(BrCompiler)
+package compiler;
+
+public class BrCompiler
+{
+  public static void main(String args []) throws ParseException
+  {
+    BrCompiler parser = new BrCompiler(System.in);
+    while (true)
+    {
+      System.out.println("zoacao iniciada");
+      System.out.print("comece a digitar sua gambiarra:");
+      try
+      {
+        switch (BrCompiler.one_line())
+        {
+          case 0 : 
+          System.out.println("OK.");
+          break;
+          case 1 : 
+          System.out.println("Goodbye.");
+          break;
+          default : 
+          break;
+        }
+      }
+      catch (Exception e)
+      {
+        System.out.println("NOK.");
+        System.out.println(e.getMessage());
+        BrCompiler.ReInit(System.in);
+      }
+      catch (Error e)
+      {
+        System.out.println("Oops.");
+        System.out.println(e.getMessage());
+        break;
+      }
+    }
+  }
+}
+
+PARSER_END(BrCompiler)
+
+SKIP :
+{
+  " "
+| "\r"
+| "\t"
+| "\n"
+}
+
+TOKEN : /*estruturas*/
+{
+  <INICIOPROG: "aaa">									|
+  < ABREBLOCO: "aa">									|	
+  < FECHABLOCO: "aa">									|
+  <INT: "stonks" >										|
+  <FLOAT: "fiado">										|
+  <STRING: "textao" >									|
+  <BOOL: "eh-migue" >									|
+  <ATRIBUICAO: "receba" >								|  	//é o recebe (=)
+  <FIMESTRUTURA: "br" >									|  	// mesmo que ;
+  <CONDICIONAL: "sepa" >								| 	// é o if
+  < ABRIREXP: "">										|
+  <FECHAREXP: "" >										|
+  
+}
+
+TOKEN : /* OPERATORS */
+{
+ < PLUS : "+" >										|	
+ < MINUS : "-" >									|
+ < MULTIPLY : "*" >									|
+ < DIVIDE : "/" >									|
+ <OPMAIOR: " >" >									|
+ <OPIGUAL: "==" >									|
+ < OPMENOR: "< " >									|
+ <OPDIF: "!=" >								
+}
+
+TOKEN :
+{
+  
+  < CONSTANT : (< DIGIT >)+ > |
+   < #DIGIT : [ "0"-"9" ] > 
+}
+
+void gambiarra() :
+{}
+{
+  
+}
