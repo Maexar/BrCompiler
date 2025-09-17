@@ -11,9 +11,34 @@ package compiler;
 
 public class BrCompiler
 {
+
+  private static boolean parserInitialized = false;
+
+  public static int one_line() throws ParseException {
+      try {
+        // Só cria nova instância na primeira vez
+        if (!parserInitialized) {
+            new BrCompiler(System.in);
+            parserInitialized = true;
+        } else {
+            // Nas próximas chamadas, apenas reinicializa
+            BrCompiler.ReInit(System.in);
+        }
+        
+        BrCompiler.main();
+        return 0;
+      } catch (ParseException e) {
+          throw e;
+      }
+  }
+  
   public static void main(String args []) throws ParseException
   {
-    BrCompiler parser = new BrCompiler(System.in);
+ 	if (!parserInitialized) {
+        new BrCompiler(System.in);
+        parserInitialized = true;
+    }
+ 
     while (true)
     {
       System.out.println("zoacao iniciada");
@@ -58,46 +83,58 @@ SKIP :
 | "\n"
 }
 
+TOKEN : /*funcoes */
+{
+  <PRINT: "printa" >			|
+  <SCAN: "papa-entrada" >		|
+  <FOR: "pet" >					|
+  <WHILE: "repet" >				|	
+  <SEPARADOR: ";" >					//execao do FOR, pra ficar mais limpo de entender
+}
+
 TOKEN : /*estruturas*/
 {
   <INICIOPROG: "gambiarra">											|
-  < ABREBLOCO: "abre-te-sezamo">									|	
-  < FECHABLOCO: "fecha-te-sezamo">									|
-  <INT: "stonks" >													|
+  <ABREBLOCO: "abre-te-sezamo">										|	
+  <FECHABLOCO: "fecha-te-sezamo">									|
+  <INT: "stonks">													|
   <FLOAT: "fiado">													|
-  <STRING: "textao" >												|
-  <BOOL: "eh-migue" >												|
-  <ATRIBUICAO: "receba" >											|  	//é o recebe (=)
-  <FIMESTRUTURA: "br" >												|  	// mesmo que ;
-  <CONDICIONAL: "sepa" >											| 	// é o if
-  < ABRIREXP: "[">													|	//substitui (
-  <FECHAREXP: "]" >													|	// '' )
-  < IDENTIFICADOR: ["a"-"z"] (["a" - "z"] | < DIGITO>)*>
+  <STRING: "textao">												|
+  <BOOL: "eh-migue">												|
+  <TRUE: "sim">														|
+  <FALSE: "nao">													|
+  <ATRIBUICAO: "receba">											|  	//é o recebe (=)
+  <FIMESTRUTURA: "br">												|  	// mesmo que ;
+  <CONDICIONAL: "sepa">												| 	// é o if
+  <SENAO: "da-teus-pulo">											|   // é o else
+  <ABRIREXP: "[">													|	//substitui (
+  <FECHAREXP: "]">													|	// '' )
+  <LITERAL_STRING:"\"" (~["\""])* "\"">								|   // qualquer caractere que NAO seja ", repetido quantas vezes for
+  <CONSTANTE_INT: (<DIGITO>)+>										|
+  <CONSTANTE_FLOAT: (<DIGITO>)+ "." (<DIGITO>)+>					|
+  <IDENTIFICADOR: ["a"-"z"] (["a"-"z"] | "-" | "_"| <DIGITO>)*>	|
+  <#DIGITO : [ "0"-"9" ]> 
 }
 
-TOKEN : /* OPERATORS */
+
+
+TOKEN: /*operacoes*/
 {
- < SOMA : "+" >											|	
- < SUBTRACAO : "-" >									|
- < MULTIPLICACAO : "*" >								|
- < DIVISAO : "/" >										|
- <OPMAIOR: ">" >										|
- <OPIGUAL: "==" >										|
- < OPMENOR: "<" >										|
- <OPDIF: "!=" >								
+ <SOMA : "+">											|	
+ <SUBTRACAO : "-">										|
+ <MULTIPLICACAO : "*">									|
+ <DIVISAO : "/">										|
+ <OPMAIOR: ">">											|
+ <OPIGUAL: "==">										|
+ <OPMENOR: "<">											|
+ <OPDIF: "!=">								
 }
 
-TOKEN :
-{
-  
-  < CONSTANTE : (< DIGITO >)+ > |
-   < #DIGITO : [ "0"-"9" ] > 
-}
 
 void main() :
 {}
 {
-  < INICIOPROG> <ABREBLOCO > bloco() < FECHABLOCO>
+  <INICIOPROG> <ABREBLOCO> bloco() <FECHABLOCO> 
 }
 
 void bloco():
@@ -109,30 +146,38 @@ void bloco():
 void comando():
 { }
 {
-   declaraVariavel() < FIMESTRUTURA > |
-   expressaoCondicional()             |
-   Expressao() < FIMESTRUTURA >		  
+   declaraVariavel() 					|
+   expressaoCondicional()             	|
+   Expressao() <FIMESTRUTURA>	 		|
+   print()								|
+   scan()								|
+   whileLoop()							|
+   forLoop()
+    
 }
 
 void declaraVariavel():
 { }
 {
-	tipoDado() ListaIdentificadores() (
-	  									< ATRIBUICAO > ListaExpressoes()
-	  								  )?
+	tipoDado()
+	ListaIdentificadores()
+	(
+	  	<ATRIBUICAO> ListaExpressoes()
+	)?
+	<FIMESTRUTURA>
 }
 
 void tipoDado():
 { }
 {
-  (<INT > | < FLOAT>| <STRING > | < BOOL>)
+  (<INT> | <FLOAT>| <STRING> | <BOOL>)
 
 }
 
 void ListaIdentificadores(): //permite varias declaracoes de variaveis
 { }
 {
-  <IDENTIFICADOR > ("," <IDENTIFICADOR >)*
+  <IDENTIFICADOR> ("," <IDENTIFICADOR>)*
 }
 
 void ListaExpressoes():
@@ -147,24 +192,39 @@ void ListaExpressoes():
 void Expressao():
 { }
 {
-  termo() (
-    		(< SOMA > | < SUBTRACAO > | < MULTIPLICACAO > |
-   			  <DIVISAO >) termo()
-   			)*
+  fator()
+  (
+    (<SOMA> | <SUBTRACAO>)
+    fator()
+  )*
 }
 
-
-void operadorLogico():
-{ }
+void fator(): { } //fazer respeitar hierarquia de operacoes
 {
-  (< OPDIF> | < OPIGUAL> | < OPMAIOR> | <OPMENOR >)
+   termo()
+  (
+    (<MULTIPLICACAO> | <DIVISAO>)
+    termo()
+  )*
 }
 
 void termo():
 {}
 {
-  (< IDENTIFICADOR > | < CONSTANTE>) | "(" Expressao() ")" 
-}									   //reconhecer prioridade de parentese
+  <IDENTIFICADOR> 		|
+  <CONSTANTE_INT>			|
+  <CONSTANTE_FLOAT>		|
+  <LITERAL_STRING>			|
+  <TRUE>					|
+  <FALSE>					|
+  "(" Expressao() ")" 			//reconhecer prioridade de parentese
+}									   
+
+void operadorLogico():
+{ }
+{
+  (<OPDIF> | <OPIGUAL> | <OPMAIOR> | <OPMENOR>)
+}
 
 void expressaoLogica():
 { }
@@ -175,8 +235,53 @@ void expressaoLogica():
 void expressaoCondicional():
 {}
 {
-  < CONDICIONAL> <ABRIREXP > expressaoLogica() <FECHAREXP > < ABREBLOCO> bloco() < FECHABLOCO>
+  condicao() (<SENAO> (
+    					condicao() |
+  						<ABREBLOCO> bloco() <FECHABLOCO>)
+  					  )?
 }
 
+void condicao():
+{ }
+{
+  <CONDICIONAL> <ABRIREXP> expressaoLogica() <FECHAREXP> <ABREBLOCO> bloco() <FECHABLOCO>
+}
 
+void print():
+{ }
+{
+   	<PRINT> ListaExpressoes() <FIMESTRUTURA>  
+}
 
+void scan():
+{}
+{
+   <SCAN> <IDENTIFICADOR> <FIMESTRUTURA>
+}
+
+void whileLoop():
+{}
+{
+  	<WHILE> <ABRIREXP > expressaoLogica() <FECHAREXP>
+  			 <ABREBLOCO> bloco() <FECHABLOCO>
+}
+
+void forLoop():
+{}
+{
+  <FOR> <ABRIREXP>
+  			atribuicaoFor() <SEPARADOR>
+  			expressaoLogica() <SEPARADOR>
+  			atribuicaoFor()
+
+  		 <FECHAREXP>
+  		 <ABREBLOCO>
+			bloco()
+  		 <FECHABLOCO>
+}
+
+void atribuicaoFor():
+{}
+{
+  (tipoDado())? <IDENTIFICADOR> <ATRIBUICAO> Expressao()
+}
