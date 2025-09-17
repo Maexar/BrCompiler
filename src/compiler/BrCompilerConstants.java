@@ -11,17 +11,51 @@ public interface BrCompilerConstants {
   /** End of File. */
   int EOF = 0;
   /** RegularExpression Id. */
-  int PLUS = 5;
+  int INICIOPROG = 5;
   /** RegularExpression Id. */
-  int MINUS = 6;
+  int ABREBLOCO = 6;
   /** RegularExpression Id. */
-  int MULTIPLY = 7;
+  int FECHABLOCO = 7;
   /** RegularExpression Id. */
-  int DIVIDE = 8;
+  int INT = 8;
   /** RegularExpression Id. */
-  int CONSTANT = 9;
+  int FLOAT = 9;
   /** RegularExpression Id. */
-  int DIGIT = 10;
+  int STRING = 10;
+  /** RegularExpression Id. */
+  int BOOL = 11;
+  /** RegularExpression Id. */
+  int ATRIBUICAO = 12;
+  /** RegularExpression Id. */
+  int FIMESTRUTURA = 13;
+  /** RegularExpression Id. */
+  int CONDICIONAL = 14;
+  /** RegularExpression Id. */
+  int ABRIREXP = 15;
+  /** RegularExpression Id. */
+  int FECHAREXP = 16;
+  /** RegularExpression Id. */
+  int IDENTIFICADOR = 17;
+  /** RegularExpression Id. */
+  int SOMA = 18;
+  /** RegularExpression Id. */
+  int SUBTRACAO = 19;
+  /** RegularExpression Id. */
+  int MULTIPLICACAO = 20;
+  /** RegularExpression Id. */
+  int DIVISAO = 21;
+  /** RegularExpression Id. */
+  int OPMAIOR = 22;
+  /** RegularExpression Id. */
+  int OPIGUAL = 23;
+  /** RegularExpression Id. */
+  int OPMENOR = 24;
+  /** RegularExpression Id. */
+  int OPDIF = 25;
+  /** RegularExpression Id. */
+  int CONSTANTE = 26;
+  /** RegularExpression Id. */
+  int DIGITO = 27;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -33,13 +67,30 @@ public interface BrCompilerConstants {
     "\"\\r\"",
     "\"\\t\"",
     "\"\\n\"",
+    "\"gambiarra\"",
+    "\"abre-te-sezamo\"",
+    "\"fecha-te-sezamo\"",
+    "\"stonks\"",
+    "\"fiado\"",
+    "\"textao\"",
+    "\"eh-migue\"",
+    "\"receba\"",
+    "\"br\"",
+    "\"sepa\"",
+    "\"[\"",
+    "\"]\"",
+    "<IDENTIFICADOR>",
     "\"+\"",
     "\"-\"",
     "\"*\"",
     "\"/\"",
-    "<CONSTANT>",
-    "<DIGIT>",
-    "\";\"",
+    "\">\"",
+    "\"==\"",
+    "\"<\"",
+    "\"!=\"",
+    "<CONSTANTE>",
+    "<DIGITO>",
+    "\",\"",
     "\"(\"",
     "\")\"",
   };

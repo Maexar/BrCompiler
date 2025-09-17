@@ -60,42 +60,123 @@ SKIP :
 
 TOKEN : /*estruturas*/
 {
-  <INICIOPROG: "aaa">									|
-  < ABREBLOCO: "aa">									|	
-  < FECHABLOCO: "aa">									|
-  <INT: "stonks" >										|
-  <FLOAT: "fiado">										|
-  <STRING: "textao" >									|
-  <BOOL: "eh-migue" >									|
-  <ATRIBUICAO: "receba" >								|  	//é o recebe (=)
-  <FIMESTRUTURA: "br" >									|  	// mesmo que ;
-  <CONDICIONAL: "sepa" >								| 	// é o if
-  < ABRIREXP: "">										|
-  <FECHAREXP: "" >										|
-  
+  <INICIOPROG: "gambiarra">											|
+  < ABREBLOCO: "abre-te-sezamo">									|	
+  < FECHABLOCO: "fecha-te-sezamo">									|
+  <INT: "stonks" >													|
+  <FLOAT: "fiado">													|
+  <STRING: "textao" >												|
+  <BOOL: "eh-migue" >												|
+  <ATRIBUICAO: "receba" >											|  	//é o recebe (=)
+  <FIMESTRUTURA: "br" >												|  	// mesmo que ;
+  <CONDICIONAL: "sepa" >											| 	// é o if
+  < ABRIREXP: "[">													|	//substitui (
+  <FECHAREXP: "]" >													|	// '' )
+  < IDENTIFICADOR: ["a"-"z"] (["a" - "z"] | < DIGITO>)*>
 }
 
 TOKEN : /* OPERATORS */
 {
- < PLUS : "+" >										|	
- < MINUS : "-" >									|
- < MULTIPLY : "*" >									|
- < DIVIDE : "/" >									|
- <OPMAIOR: " >" >									|
- <OPIGUAL: "==" >									|
- < OPMENOR: "< " >									|
+ < SOMA : "+" >											|	
+ < SUBTRACAO : "-" >									|
+ < MULTIPLICACAO : "*" >								|
+ < DIVISAO : "/" >										|
+ <OPMAIOR: ">" >										|
+ <OPIGUAL: "==" >										|
+ < OPMENOR: "<" >										|
  <OPDIF: "!=" >								
 }
 
 TOKEN :
 {
   
-  < CONSTANT : (< DIGIT >)+ > |
-   < #DIGIT : [ "0"-"9" ] > 
+  < CONSTANTE : (< DIGITO >)+ > |
+   < #DIGITO : [ "0"-"9" ] > 
 }
 
-void gambiarra() :
+void main() :
 {}
 {
-  
+  < INICIOPROG> <ABREBLOCO > bloco() < FECHABLOCO>
 }
+
+void bloco():
+{}
+{
+ 	(comando())*
+}
+
+void comando():
+{ }
+{
+   declaraVariavel() < FIMESTRUTURA > |
+   expressaoCondicional()             |
+   Expressao() < FIMESTRUTURA >		  
+}
+
+void declaraVariavel():
+{ }
+{
+	tipoDado() ListaIdentificadores() (
+	  									< ATRIBUICAO > ListaExpressoes()
+	  								  )?
+}
+
+void tipoDado():
+{ }
+{
+  (<INT > | < FLOAT>| <STRING > | < BOOL>)
+
+}
+
+void ListaIdentificadores(): //permite varias declaracoes de variaveis
+{ }
+{
+  <IDENTIFICADOR > ("," <IDENTIFICADOR >)*
+}
+
+void ListaExpressoes():
+{}
+{
+  Expressao()
+  (
+    "," Expressao()
+  )*
+}
+
+void Expressao():
+{ }
+{
+  termo() (
+    		(< SOMA > | < SUBTRACAO > | < MULTIPLICACAO > |
+   			  <DIVISAO >) termo()
+   			)*
+}
+
+
+void operadorLogico():
+{ }
+{
+  (< OPDIF> | < OPIGUAL> | < OPMAIOR> | <OPMENOR >)
+}
+
+void termo():
+{}
+{
+  (< IDENTIFICADOR > | < CONSTANTE>) | "(" Expressao() ")" 
+}									   //reconhecer prioridade de parentese
+
+void expressaoLogica():
+{ }
+{
+  Expressao() operadorLogico() Expressao()
+}
+
+void expressaoCondicional():
+{}
+{
+  < CONDICIONAL> <ABRIREXP > expressaoLogica() <FECHAREXP > < ABREBLOCO> bloco() < FECHABLOCO>
+}
+
+
+
