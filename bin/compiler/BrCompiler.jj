@@ -11,17 +11,110 @@ package compiler;
 
 public class BrCompiler
 {
-
   private static boolean parserInitialized = false;
+
+  // Mapeamento de tokens para nomes em português
+  private static String obterTokenPortugues(int tipoToken) {
+    switch(tipoToken) {
+      case INICIOPROG: return "gambiarra";
+      case ABREBLOCO: return "abre-te-sezamo";
+      case FECHABLOCO: return "fecha-te-sezamo";
+      case INT: return "stonks";
+      case FLOAT: return "fiado";
+      case STRING: return "textao";
+      case BOOL: return "eh-migue";
+      case TRUE: return "sim";
+      case FALSE: return "nao";
+      case ATRIBUICAO: return "receba";
+      case FIMESTRUTURA: return "br";
+      case CONDICIONAL: return "sepa";
+      case SENAO: return "da-teus-pulo";
+      case ABRIREXP: return "[";
+      case FECHAREXP: return "]";
+      case PRINT: return "printa";
+      case SCAN: return "papa-entrada";
+      case FOR: return "pet";
+      case WHILE: return "repet";
+      case SEPARADOR: return ";";
+      case SOMA: return "+";
+      case SUBTRACAO: return "-";
+      case MULTIPLICACAO: return "*";
+      case DIVISAO: return "/";
+      case OPMAIOR: return ">";
+      case OPIGUAL: return "==";
+      case OPMENOR: return "<";
+      case OPDIF: return "!=";
+      case IDENTIFICADOR: return "identificador";
+      case CONSTANTE_INT: return "numero inteiro";
+      case CONSTANTE_FLOAT: return "numero decimal";
+      case LITERAL_STRING: return "texto";
+      case 38: return "virgula (,)";
+      case 39: return "parentese aberto (";
+      case 40: return "parentese fechado )";
+      default: return "token desconhecido";
+    }
+  }
+
+  // metodo pra gerar mensagens de erro em portugues
+ public static void handleParseError(ParseException e) {
+    System.out.println("NOK.");
+    System.out.println("ERRO DE SINTAXE:");
+    
+    Token currentToken = e.currentToken;
+    Token tokenEncontrado = null;
+    
+    // tenta obter as info do token encontrado
+    if (currentToken != null && currentToken.next != null) {
+        tokenEncontrado = currentToken.next;  // O próximo token é o que causou o erro
+    } else if (currentToken != null) {
+        tokenEncontrado = currentToken;
+    } else {
+        // se currentToken é null, tenta pegar do token_source
+        try {
+            tokenEncontrado = getToken(1);  // pega o prox token
+        } catch (Exception ex) {
+            // se n der usa info do proprio erro
+            tokenEncontrado = null;
+        }
+    }
+    
+    // aqui mostra informacoes do token que encontrou
+    if (tokenEncontrado != null && tokenEncontrado.image != null) {
+        System.out.println("Token encontrado: '" + tokenEncontrado.image + "' na linha " + tokenEncontrado.beginLine + ", coluna " + tokenEncontrado.beginColumn);
+    } else {
+        // ultima tentativa é extrair do token atual (se possivel)
+        if (currentToken != null) {
+            String tokenImage = currentToken.image != null ? currentToken.image : "EOF";
+            int linha = currentToken.beginLine > 0 ? currentToken.beginLine : 1;
+            int coluna = currentToken.beginColumn > 0 ? currentToken.beginColumn : 1;
+            System.out.println("Token encontrado: '" + tokenImage + "' na linha " + linha + ", coluna " + coluna);
+        } else {
+            System.out.println("Token encontrado: fim de arquivo inesperado");
+        }
+    }
+    
+    // aqui mostra os tokens esperados
+    if (e.expectedTokenSequences.length > 0) {
+        System.out.print("Era esperado: ");
+        boolean first = true;
+        for (int[] sequence : e.expectedTokenSequences) {
+            if (!first) System.out.print(" ou ");
+            for (int i = 0; i < sequence.length; i++) {
+                if (i > 0) System.out.print(" ");
+                System.out.print("'" + obterTokenPortugues(sequence[i]) + "'");
+            }
+            first = false;
+        }
+        System.out.println();
+    }
+}
 
   public static int one_line() throws ParseException {
       try {
-        // Só cria nova instância na primeira vez
         if (!parserInitialized) {
             new BrCompiler(System.in);
             parserInitialized = true;
         } else {
-            // Nas próximas chamadas, apenas reinicializa
             BrCompiler.ReInit(System.in);
         }
         
@@ -33,44 +126,72 @@ public class BrCompiler
   }
   
   public static void main(String args []) throws ParseException
-  {
- 	if (!parserInitialized) {
+{
+    if (!parserInitialized) {
         new BrCompiler(System.in);
         parserInitialized = true;
     }
  
     while (true)
     {
-      System.out.println("zoacao iniciada");
-      System.out.print("comece a digitar sua gambiarra:");
-      try
-      {
-        switch (BrCompiler.one_line())
+        System.out.println("zoacao iniciada");
+        System.out.print("comece a digitar sua gambiarra:");
+        
+        try
         {
-          case 0 : 
-          System.out.println("OK.");
-          break;
-          case 1 : 
-          System.out.println("Goodbye.");
-          break;
-          default : 
-          break;
+            switch (BrCompiler.one_line())
+            {
+                case 0 : 
+                System.out.println("OK.");
+                break;
+                case 1 : 
+                System.out.println("Goodbye.");
+                break;
+                default : 
+                break;
+            }
         }
-      }
-      catch (Exception e)
-      {
-        System.out.println("NOK.");
-        System.out.println(e.getMessage());
-        BrCompiler.ReInit(System.in);
-      }
-      catch (Error e)
-      {
-        System.out.println("Oops.");
-        System.out.println(e.getMessage());
-        break;
-      }
+        catch (ParseException e)
+        {
+            handleParseError(e);
+            //limpeza do buffer:  (necessaria pois alguns tokens de erro estavam sendo concatenados apos muitas interacoes no console)
+            try {
+                while (System.in.available() > 0) {
+                    System.in.read(); // limpa caracteres restantes
+                }
+            } catch (Exception ex) {
+                // ignora erros de limpeza
+            }
+            BrCompiler.ReInit(System.in);
+        }
+        catch (TokenMgrError e)
+        {
+            System.out.println("NOK.");
+            System.out.println("ERRO LÉXICO: Caractere inválido encontrado - " + e.getMessage());
+            //  limpeza é feita aqui tb:
+            try {
+                while (System.in.available() > 0) {
+                    System.in.read();
+                }
+            } catch (Exception ex) {
+                // ignora
+            }
+            BrCompiler.ReInit(System.in);
+        }
+        catch (Exception e)
+        {
+            System.out.println("NOK.");
+            System.out.println("ERRO INESPERADO: " + e.getMessage());
+            BrCompiler.ReInit(System.in);
+        }
+        catch (Error e)
+        {
+            System.out.println("Oops.");
+            System.out.println("ERRO FATAL: " + e.getMessage());
+            break;
+        }
     }
-  }
+}
 }
 
 PARSER_END(BrCompiler)
@@ -89,7 +210,7 @@ TOKEN : /*funcoes */
   <SCAN: "papa-entrada" >		|
   <FOR: "pet" >					|
   <WHILE: "repet" >				|	
-  <SEPARADOR: ";" >					//execao do FOR, pra ficar mais limpo de entender
+  <SEPARADOR: ";" >
 }
 
 TOKEN : /*estruturas*/
@@ -103,20 +224,18 @@ TOKEN : /*estruturas*/
   <BOOL: "eh-migue">												|
   <TRUE: "sim">														|
   <FALSE: "nao">													|
-  <ATRIBUICAO: "receba">											|  	//é o recebe (=)
-  <FIMESTRUTURA: "br">												|  	// mesmo que ;
-  <CONDICIONAL: "sepa">												| 	// é o if
-  <SENAO: "da-teus-pulo">											|   // é o else
-  <ABRIREXP: "[">													|	//substitui (
-  <FECHAREXP: "]">													|	// '' )
-  <LITERAL_STRING:"\"" (~["\""])* "\"">								|   // qualquer caractere que NAO seja ", repetido quantas vezes for
+  <ATRIBUICAO: "receba">											|
+  <FIMESTRUTURA: "br">												|
+  <CONDICIONAL: "sepa">												|
+  <SENAO: "da-teus-pulo">											|
+  <ABRIREXP: "[">													|
+  <FECHAREXP: "]">													|
+  <LITERAL_STRING:"\"" (~["\""])* "\"">								|
   <CONSTANTE_INT: (<DIGITO>)+>										|
   <CONSTANTE_FLOAT: (<DIGITO>)+ "." (<DIGITO>)+>					|
   <IDENTIFICADOR: ["a"-"z"] (["a"-"z"] | "-" | "_"| <DIGITO>)*>	|
   <#DIGITO : [ "0"-"9" ]> 
 }
-
-
 
 TOKEN: /*operacoes*/
 {
@@ -127,7 +246,9 @@ TOKEN: /*operacoes*/
  <OPMAIOR: ">">											|
  <OPIGUAL: "==">										|
  <OPMENOR: "<">											|
- <OPDIF: "!=">								
+ <OPDIF: "!=">											|
+ <OPMAIORIGUAL: " >=" >									|
+ <OPMENORIGUAL: "<=" >
 }
 
 
@@ -148,6 +269,7 @@ void comando():
 {
    declaraVariavel() 					|
    expressaoCondicional()             	|
+   LOOKAHEAD(2) atribuicao()			|   //resolve conflito de indecibilidade entre atribuicao e expressao
    Expressao() <FIMESTRUTURA>	 		|
    print()								|
    scan()								|
@@ -174,6 +296,12 @@ void tipoDado():
 
 }
 
+void atribuicao():
+{ }
+{
+  <IDENTIFICADOR> <ATRIBUICAO> Expressao() <FIMESTRUTURA>
+}
+
 void ListaIdentificadores(): //permite varias declaracoes de variaveis
 { }
 {
@@ -188,6 +316,7 @@ void ListaExpressoes():
     "," Expressao()
   )*
 }
+
 
 void Expressao():
 { }
@@ -223,7 +352,7 @@ void termo():
 void operadorLogico():
 { }
 {
-  (<OPDIF> | <OPIGUAL> | <OPMAIOR> | <OPMENOR>)
+  (<OPDIF> | <OPIGUAL> | <OPMAIOR> | <OPMENOR> | <OPMAIORIGUAL> | <OPMENORIGUAL>)
 }
 
 void expressaoLogica():

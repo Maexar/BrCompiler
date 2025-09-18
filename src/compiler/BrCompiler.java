@@ -3,17 +3,110 @@
 package compiler;
 
 public class BrCompiler implements BrCompilerConstants {
-
   private static boolean parserInitialized = false;
+
+  // Mapeamento de tokens para nomes em português
+  private static String obterTokenPortugues(int tipoToken) {
+    switch(tipoToken) {
+      case INICIOPROG: return "gambiarra";
+      case ABREBLOCO: return "abre-te-sezamo";
+      case FECHABLOCO: return "fecha-te-sezamo";
+      case INT: return "stonks";
+      case FLOAT: return "fiado";
+      case STRING: return "textao";
+      case BOOL: return "eh-migue";
+      case TRUE: return "sim";
+      case FALSE: return "nao";
+      case ATRIBUICAO: return "receba";
+      case FIMESTRUTURA: return "br";
+      case CONDICIONAL: return "sepa";
+      case SENAO: return "da-teus-pulo";
+      case ABRIREXP: return "[";
+      case FECHAREXP: return "]";
+      case PRINT: return "printa";
+      case SCAN: return "papa-entrada";
+      case FOR: return "pet";
+      case WHILE: return "repet";
+      case SEPARADOR: return ";";
+      case SOMA: return "+";
+      case SUBTRACAO: return "-";
+      case MULTIPLICACAO: return "*";
+      case DIVISAO: return "/";
+      case OPMAIOR: return ">";
+      case OPIGUAL: return "==";
+      case OPMENOR: return "<";
+      case OPDIF: return "!=";
+      case IDENTIFICADOR: return "identificador";
+      case CONSTANTE_INT: return "numero inteiro";
+      case CONSTANTE_FLOAT: return "numero decimal";
+      case LITERAL_STRING: return "texto";
+      case 38: return "virgula (,)";
+      case 39: return "parentese aberto (";
+      case 40: return "parentese fechado )";
+      default: return "token desconhecido";
+    }
+  }
+
+  // metodo pra gerar mensagens de erro em portugues
+ public static void handleParseError(ParseException e) {
+    System.out.println("NOK.");
+    System.out.println("ERRO DE SINTAXE:");
+
+    Token currentToken = e.currentToken;
+    Token tokenEncontrado = null;
+
+    // tenta obter as info do token encontrado
+    if (currentToken != null && currentToken.next != null) {
+        tokenEncontrado = currentToken.next;  // O próximo token é o que causou o erro
+    } else if (currentToken != null) {
+        tokenEncontrado = currentToken;
+    } else {
+        // se currentToken é null, tenta pegar do token_source
+        try {
+            tokenEncontrado = getToken(1);  // pega o prox token
+        } catch (Exception ex) {
+            // se n der usa info do proprio erro
+            tokenEncontrado = null;
+        }
+    }
+
+    // aqui mostra informacoes do token que encontrou
+    if (tokenEncontrado != null && tokenEncontrado.image != null) {
+        System.out.println("Token encontrado: '" + tokenEncontrado.image + "' na linha " + tokenEncontrado.beginLine + ", coluna " + tokenEncontrado.beginColumn);
+    } else {
+        // ultima tentativa é extrair do token atual (se possivel)
+        if (currentToken != null) {
+            String tokenImage = currentToken.image != null ? currentToken.image : "EOF";
+            int linha = currentToken.beginLine > 0 ? currentToken.beginLine : 1;
+            int coluna = currentToken.beginColumn > 0 ? currentToken.beginColumn : 1;
+            System.out.println("Token encontrado: '" + tokenImage + "' na linha " + linha + ", coluna " + coluna);
+        } else {
+            System.out.println("Token encontrado: fim de arquivo inesperado");
+        }
+    }
+
+    // aqui mostra os tokens esperados
+    if (e.expectedTokenSequences.length > 0) {
+        System.out.print("Era esperado: ");
+        boolean first = true;
+        for (int[] sequence : e.expectedTokenSequences) {
+            if (!first) System.out.print(" ou ");
+            for (int i = 0; i < sequence.length; i++) {
+                if (i > 0) System.out.print(" ");
+                System.out.print("'" + obterTokenPortugues(sequence[i]) + "'");
+            }
+            first = false;
+        }
+        System.out.println();
+    }
+}
 
   public static int one_line() throws ParseException {
       try {
-        // Só cria nova instância na primeira vez
         if (!parserInitialized) {
             new BrCompiler(System.in);
             parserInitialized = true;
         } else {
-            // Nas próximas chamadas, apenas reinicializa
             BrCompiler.ReInit(System.in);
         }
 
@@ -25,44 +118,72 @@ public class BrCompiler implements BrCompilerConstants {
   }
 
   public static void main(String args []) throws ParseException
-  {
-        if (!parserInitialized) {
+{
+    if (!parserInitialized) {
         new BrCompiler(System.in);
         parserInitialized = true;
     }
 
     while (true)
     {
-      System.out.println("zoacao iniciada");
-      System.out.print("comece a digitar sua gambiarra:");
-      try
-      {
-        switch (BrCompiler.one_line())
+        System.out.println("zoacao iniciada");
+        System.out.print("comece a digitar sua gambiarra:");
+
+        try
         {
-          case 0 :
-          System.out.println("OK.");
-          break;
-          case 1 :
-          System.out.println("Goodbye.");
-          break;
-          default :
-          break;
+            switch (BrCompiler.one_line())
+            {
+                case 0 :
+                System.out.println("OK.");
+                break;
+                case 1 :
+                System.out.println("Goodbye.");
+                break;
+                default :
+                break;
+            }
         }
-      }
-      catch (Exception e)
-      {
-        System.out.println("NOK.");
-        System.out.println(e.getMessage());
-        BrCompiler.ReInit(System.in);
-      }
-      catch (Error e)
-      {
-        System.out.println("Oops.");
-        System.out.println(e.getMessage());
-        break;
-      }
+        catch (ParseException e)
+        {
+            handleParseError(e);
+            //limpeza do buffer:  (necessaria pois alguns tokens de erro estavam sendo concatenados apos muitas interacoes no console)
+            try {
+                while (System.in.available() > 0) {
+                    System.in.read(); // limpa caracteres restantes
+                }
+            } catch (Exception ex) {
+                // ignora erros de limpeza
+            }
+            BrCompiler.ReInit(System.in);
+        }
+        catch (TokenMgrError e)
+        {
+            System.out.println("NOK.");
+            System.out.println("ERRO L\u00c9XICO: Caractere inv\u00e1lido encontrado - " + e.getMessage());
+            //  limpeza é feita aqui tb:
+            try {
+                while (System.in.available() > 0) {
+                    System.in.read();
+                }
+            } catch (Exception ex) {
+                // ignora
+            }
+            BrCompiler.ReInit(System.in);
+        }
+        catch (Exception e)
+        {
+            System.out.println("NOK.");
+            System.out.println("ERRO INESPERADO: " + e.getMessage());
+            BrCompiler.ReInit(System.in);
+        }
+        catch (Error e)
+        {
+            System.out.println("Oops.");
+            System.out.println("ERRO FATAL: " + e.getMessage());
+            break;
+        }
     }
-  }
+}
 
   static final public void main() throws ParseException {
     jj_consume_token(INICIOPROG);
@@ -90,7 +211,7 @@ public class BrCompiler implements BrCompilerConstants {
       case CONSTANTE_INT:
       case CONSTANTE_FLOAT:
       case IDENTIFICADOR:
-      case 39:{
+      case 41:{
         ;
         break;
         }
@@ -115,37 +236,45 @@ public class BrCompiler implements BrCompilerConstants {
       expressaoCondicional();
       break;
       }
-    case TRUE:
-    case FALSE:
-    case LITERAL_STRING:
-    case CONSTANTE_INT:
-    case CONSTANTE_FLOAT:
-    case IDENTIFICADOR:
-    case 39:{
-      Expressao();
-      jj_consume_token(FIMESTRUTURA);
-      break;
-      }
-    case PRINT:{
-      print();
-      break;
-      }
-    case SCAN:{
-      scan();
-      break;
-      }
-    case WHILE:{
-      whileLoop();
-      break;
-      }
-    case FOR:{
-      forLoop();
-      break;
-      }
     default:
       jj_la1[1] = jj_gen;
-      jj_consume_token(-1);
-      throw new ParseException();
+      if (jj_2_1(2)) {
+        atribuicao();
+      } else {
+        switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+        case TRUE:
+        case FALSE:
+        case LITERAL_STRING:
+        case CONSTANTE_INT:
+        case CONSTANTE_FLOAT:
+        case IDENTIFICADOR:
+        case 41:{
+          Expressao();
+          jj_consume_token(FIMESTRUTURA);
+          break;
+          }
+        case PRINT:{
+          print();
+          break;
+          }
+        case SCAN:{
+          scan();
+          break;
+          }
+        case WHILE:{
+          whileLoop();
+          break;
+          }
+        case FOR:{
+          forLoop();
+          break;
+          }
+        default:
+          jj_la1[2] = jj_gen;
+          jj_consume_token(-1);
+          throw new ParseException();
+        }
+      }
     }
 }
 
@@ -159,7 +288,7 @@ public class BrCompiler implements BrCompilerConstants {
       break;
       }
     default:
-      jj_la1[2] = jj_gen;
+      jj_la1[3] = jj_gen;
       ;
     }
     jj_consume_token(FIMESTRUTURA);
@@ -184,10 +313,17 @@ public class BrCompiler implements BrCompilerConstants {
       break;
       }
     default:
-      jj_la1[3] = jj_gen;
+      jj_la1[4] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
+}
+
+  static final public void atribuicao() throws ParseException {
+    jj_consume_token(IDENTIFICADOR);
+    jj_consume_token(ATRIBUICAO);
+    Expressao();
+    jj_consume_token(FIMESTRUTURA);
 }
 
   static final public void ListaIdentificadores() throws ParseException {
@@ -195,15 +331,15 @@ public class BrCompiler implements BrCompilerConstants {
     label_2:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
-      case 38:{
+      case 40:{
         ;
         break;
         }
       default:
-        jj_la1[4] = jj_gen;
+        jj_la1[5] = jj_gen;
         break label_2;
       }
-      jj_consume_token(38);
+      jj_consume_token(40);
       jj_consume_token(IDENTIFICADOR);
     }
 }
@@ -213,15 +349,15 @@ public class BrCompiler implements BrCompilerConstants {
     label_3:
     while (true) {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
-      case 38:{
+      case 40:{
         ;
         break;
         }
       default:
-        jj_la1[5] = jj_gen;
+        jj_la1[6] = jj_gen;
         break label_3;
       }
-      jj_consume_token(38);
+      jj_consume_token(40);
       Expressao();
     }
 }
@@ -237,7 +373,7 @@ public class BrCompiler implements BrCompilerConstants {
         break;
         }
       default:
-        jj_la1[6] = jj_gen;
+        jj_la1[7] = jj_gen;
         break label_4;
       }
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -250,7 +386,7 @@ public class BrCompiler implements BrCompilerConstants {
         break;
         }
       default:
-        jj_la1[7] = jj_gen;
+        jj_la1[8] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -269,7 +405,7 @@ public class BrCompiler implements BrCompilerConstants {
         break;
         }
       default:
-        jj_la1[8] = jj_gen;
+        jj_la1[9] = jj_gen;
         break label_5;
       }
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -282,7 +418,7 @@ public class BrCompiler implements BrCompilerConstants {
         break;
         }
       default:
-        jj_la1[9] = jj_gen;
+        jj_la1[10] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -316,14 +452,14 @@ public class BrCompiler implements BrCompilerConstants {
       jj_consume_token(FALSE);
       break;
       }
-    case 39:{
-      jj_consume_token(39);
+    case 41:{
+      jj_consume_token(41);
       Expressao();
-      jj_consume_token(40);
+      jj_consume_token(42);
       break;
       }
     default:
-      jj_la1[10] = jj_gen;
+      jj_la1[11] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -347,8 +483,16 @@ public class BrCompiler implements BrCompilerConstants {
       jj_consume_token(OPMENOR);
       break;
       }
+    case OPMAIORIGUAL:{
+      jj_consume_token(OPMAIORIGUAL);
+      break;
+      }
+    case OPMENORIGUAL:{
+      jj_consume_token(OPMENORIGUAL);
+      break;
+      }
     default:
-      jj_la1[11] = jj_gen;
+      jj_la1[12] = jj_gen;
       jj_consume_token(-1);
       throw new ParseException();
     }
@@ -377,14 +521,14 @@ public class BrCompiler implements BrCompilerConstants {
         break;
         }
       default:
-        jj_la1[12] = jj_gen;
+        jj_la1[13] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
       break;
       }
     default:
-      jj_la1[13] = jj_gen;
+      jj_la1[14] = jj_gen;
       ;
     }
 }
@@ -445,13 +589,34 @@ public class BrCompiler implements BrCompilerConstants {
       break;
       }
     default:
-      jj_la1[14] = jj_gen;
+      jj_la1[15] = jj_gen;
       ;
     }
     jj_consume_token(IDENTIFICADOR);
     jj_consume_token(ATRIBUICAO);
     Expressao();
 }
+
+  static private boolean jj_2_1(int xla)
+ {
+    jj_la = xla; jj_lastpos = jj_scanpos = token;
+    try { return (!jj_3_1()); }
+    catch(LookaheadSuccess ls) { return true; }
+    finally { jj_save(0, xla); }
+  }
+
+  static private boolean jj_3R_atribuicao_302_3_6()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(ATRIBUICAO)) return true;
+    return false;
+  }
+
+  static private boolean jj_3_1()
+ {
+    if (jj_3R_atribuicao_302_3_6()) return true;
+    return false;
+  }
 
   static private boolean jj_initialized_once = false;
   /** Generated Token Manager. */
@@ -462,8 +627,10 @@ public class BrCompiler implements BrCompilerConstants {
   /** Next token. */
   static public Token jj_nt;
   static private int jj_ntk;
+  static private Token jj_scanpos, jj_lastpos;
+  static private int jj_la;
   static private int jj_gen;
-  static final private int[] jj_la1 = new int[15];
+  static final private int[] jj_la1 = new int[16];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -471,11 +638,14 @@ public class BrCompiler implements BrCompilerConstants {
 	   jj_la1_init_1();
 	}
 	private static void jj_la1_init_0() {
-	   jj_la1_0 = new int[] {0x1e27e1e0,0x1e27e1e0,0x80000,0x1e000,0x0,0x0,0xc0000000,0xc0000000,0x0,0x0,0x1e060000,0x0,0x200800,0x400000,0x1e000,};
+	   jj_la1_0 = new int[] {0x1e27e1e0,0x21e000,0x1e0601e0,0x80000,0x1e000,0x0,0x0,0xc0000000,0xc0000000,0x0,0x0,0x1e060000,0x0,0x200800,0x400000,0x1e000,};
 	}
 	private static void jj_la1_init_1() {
-	   jj_la1_1 = new int[] {0x80,0x80,0x0,0x0,0x40,0x40,0x0,0x0,0x3,0x3,0x80,0x3c,0x0,0x0,0x0,};
+	   jj_la1_1 = new int[] {0x200,0x0,0x200,0x0,0x0,0x100,0x100,0x0,0x0,0x3,0x3,0x200,0xfc,0x0,0x0,0x0,};
 	}
+  static final private JJCalls[] jj_2_rtns = new JJCalls[1];
+  static private boolean jj_rescan = false;
+  static private int jj_gc = 0;
 
   /** Constructor with InputStream. */
   public BrCompiler(java.io.InputStream stream) {
@@ -495,7 +665,8 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 15; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
   /** Reinitialise. */
@@ -509,7 +680,8 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 15; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
   /** Constructor. */
@@ -526,7 +698,8 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 15; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
   /** Reinitialise. */
@@ -544,7 +717,8 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 15; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
   /** Constructor with generated Token Manager. */
@@ -560,7 +734,8 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 15; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
   /** Reinitialise. */
@@ -569,7 +744,8 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 15; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 16; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
   static private Token jj_consume_token(int kind) throws ParseException {
@@ -579,11 +755,50 @@ public class BrCompiler implements BrCompilerConstants {
 	 jj_ntk = -1;
 	 if (token.kind == kind) {
 	   jj_gen++;
+	   if (++jj_gc > 100) {
+		 jj_gc = 0;
+		 for (int i = 0; i < jj_2_rtns.length; i++) {
+		   JJCalls c = jj_2_rtns[i];
+		   while (c != null) {
+			 if (c.gen < jj_gen) c.first = null;
+			 c = c.next;
+		   }
+		 }
+	   }
 	   return token;
 	 }
 	 token = oldToken;
 	 jj_kind = kind;
 	 throw generateParseException();
+  }
+
+  @SuppressWarnings("serial")
+  static private final class LookaheadSuccess extends java.lang.Error {
+    @Override
+    public Throwable fillInStackTrace() {
+      return this;
+    }
+  }
+  static private final LookaheadSuccess jj_ls = new LookaheadSuccess();
+  static private boolean jj_scan_token(int kind) {
+	 if (jj_scanpos == jj_lastpos) {
+	   jj_la--;
+	   if (jj_scanpos.next == null) {
+		 jj_lastpos = jj_scanpos = jj_scanpos.next = token_source.getNextToken();
+	   } else {
+		 jj_lastpos = jj_scanpos = jj_scanpos.next;
+	   }
+	 } else {
+	   jj_scanpos = jj_scanpos.next;
+	 }
+	 if (jj_rescan) {
+	   int i = 0; Token tok = token;
+	   while (tok != null && tok != jj_scanpos) { i++; tok = tok.next; }
+	   if (tok != null) jj_add_error_token(kind, i);
+	 }
+	 if (jj_scanpos.kind != kind) return true;
+	 if (jj_la == 0 && jj_scanpos == jj_lastpos) throw jj_ls;
+	 return false;
   }
 
 
@@ -616,16 +831,56 @@ public class BrCompiler implements BrCompilerConstants {
   static private java.util.List<int[]> jj_expentries = new java.util.ArrayList<int[]>();
   static private int[] jj_expentry;
   static private int jj_kind = -1;
+  static private int[] jj_lasttokens = new int[100];
+  static private int jj_endpos;
+
+  static private void jj_add_error_token(int kind, int pos) {
+	 if (pos >= 100) {
+		return;
+	 }
+
+	 if (pos == jj_endpos + 1) {
+	   jj_lasttokens[jj_endpos++] = kind;
+	 } else if (jj_endpos != 0) {
+	   jj_expentry = new int[jj_endpos];
+
+	   for (int i = 0; i < jj_endpos; i++) {
+		 jj_expentry[i] = jj_lasttokens[i];
+	   }
+
+	   for (int[] oldentry : jj_expentries) {
+		 if (oldentry.length == jj_expentry.length) {
+		   boolean isMatched = true;
+
+		   for (int i = 0; i < jj_expentry.length; i++) {
+			 if (oldentry[i] != jj_expentry[i]) {
+			   isMatched = false;
+			   break;
+			 }
+
+		   }
+		   if (isMatched) {
+			 jj_expentries.add(jj_expentry);
+			 break;
+		   }
+		 }
+	   }
+
+	   if (pos != 0) {
+		 jj_lasttokens[(jj_endpos = pos) - 1] = kind;
+	   }
+	 }
+  }
 
   /** Generate ParseException. */
   static public ParseException generateParseException() {
 	 jj_expentries.clear();
-	 boolean[] la1tokens = new boolean[41];
+	 boolean[] la1tokens = new boolean[43];
 	 if (jj_kind >= 0) {
 	   la1tokens[jj_kind] = true;
 	   jj_kind = -1;
 	 }
-	 for (int i = 0; i < 15; i++) {
+	 for (int i = 0; i < 16; i++) {
 	   if (jj_la1[i] == jj_gen) {
 		 for (int j = 0; j < 32; j++) {
 		   if ((jj_la1_0[i] & (1<<j)) != 0) {
@@ -637,13 +892,16 @@ public class BrCompiler implements BrCompilerConstants {
 		 }
 	   }
 	 }
-	 for (int i = 0; i < 41; i++) {
+	 for (int i = 0; i < 43; i++) {
 	   if (la1tokens[i]) {
 		 jj_expentry = new int[1];
 		 jj_expentry[0] = i;
 		 jj_expentries.add(jj_expentry);
 	   }
 	 }
+	 jj_endpos = 0;
+	 jj_rescan_token();
+	 jj_add_error_token(0, 0);
 	 int[][] exptokseq = new int[jj_expentries.size()][];
 	 for (int i = 0; i < jj_expentries.size(); i++) {
 	   exptokseq[i] = jj_expentries.get(i);
@@ -664,6 +922,46 @@ public class BrCompiler implements BrCompilerConstants {
 
   /** Disable tracing. */
   static final public void disable_tracing() {
+  }
+
+  static private void jj_rescan_token() {
+	 jj_rescan = true;
+	 for (int i = 0; i < 1; i++) {
+	   try {
+		 JJCalls p = jj_2_rtns[i];
+
+		 do {
+		   if (p.gen > jj_gen) {
+			 jj_la = p.arg; jj_lastpos = jj_scanpos = p.first;
+			 switch (i) {
+			   case 0: jj_3_1(); break;
+			 }
+		   }
+		   p = p.next;
+		 } while (p != null);
+
+		 } catch(LookaheadSuccess ls) { }
+	 }
+	 jj_rescan = false;
+  }
+
+  static private void jj_save(int index, int xla) {
+	 JJCalls p = jj_2_rtns[index];
+	 while (p.gen > jj_gen) {
+	   if (p.next == null) { p = p.next = new JJCalls(); break; }
+	   p = p.next;
+	 }
+
+	 p.gen = jj_gen + xla - jj_la; 
+	 p.first = token;
+	 p.arg = xla;
+  }
+
+  static final class JJCalls {
+	 int gen;
+	 Token first;
+	 int arg;
+	 JJCalls next;
   }
 
 }

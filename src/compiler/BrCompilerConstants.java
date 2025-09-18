@@ -76,6 +76,10 @@ public interface BrCompilerConstants {
   int OPMENOR = 36;
   /** RegularExpression Id. */
   int OPDIF = 37;
+  /** RegularExpression Id. */
+  int OPMAIORIGUAL = 38;
+  /** RegularExpression Id. */
+  int OPMENORIGUAL = 39;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -120,6 +124,8 @@ public interface BrCompilerConstants {
     "\"==\"",
     "\"<\"",
     "\"!=\"",
+    "\" >=\"",
+    "\"<=\"",
     "\",\"",
     "\"(\"",
     "\")\"",
