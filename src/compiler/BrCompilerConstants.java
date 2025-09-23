@@ -21,65 +21,87 @@ public interface BrCompilerConstants {
   /** RegularExpression Id. */
   int SEPARADOR = 9;
   /** RegularExpression Id. */
-  int INICIOPROG = 10;
+  int FUNCAO = 10;
   /** RegularExpression Id. */
-  int ABREBLOCO = 11;
+  int RETURN = 11;
   /** RegularExpression Id. */
-  int FECHABLOCO = 12;
+  int VIRGULA = 12;
   /** RegularExpression Id. */
-  int INT = 13;
+  int LISTA = 13;
   /** RegularExpression Id. */
-  int FLOAT = 14;
+  int ADICIONAR = 14;
   /** RegularExpression Id. */
-  int STRING = 15;
+  int REMOVER = 15;
   /** RegularExpression Id. */
-  int BOOL = 16;
+  int TAMANHO = 16;
   /** RegularExpression Id. */
-  int TRUE = 17;
+  int INICIOPROG = 17;
   /** RegularExpression Id. */
-  int FALSE = 18;
+  int ABREBLOCO = 18;
   /** RegularExpression Id. */
-  int ATRIBUICAO = 19;
+  int FECHABLOCO = 19;
   /** RegularExpression Id. */
-  int FIMESTRUTURA = 20;
+  int INT = 20;
   /** RegularExpression Id. */
-  int CONDICIONAL = 21;
+  int FLOAT = 21;
   /** RegularExpression Id. */
-  int SENAO = 22;
+  int STRING = 22;
   /** RegularExpression Id. */
-  int ABRIREXP = 23;
+  int BOOL = 23;
   /** RegularExpression Id. */
-  int FECHAREXP = 24;
+  int TRUE = 24;
   /** RegularExpression Id. */
-  int LITERAL_STRING = 25;
+  int FALSE = 25;
   /** RegularExpression Id. */
-  int CONSTANTE_INT = 26;
+  int ATRIBUICAO = 26;
   /** RegularExpression Id. */
-  int CONSTANTE_FLOAT = 27;
+  int FIMESTRUTURA = 27;
   /** RegularExpression Id. */
-  int IDENTIFICADOR = 28;
+  int CONDICIONAL = 28;
   /** RegularExpression Id. */
-  int DIGITO = 29;
+  int SENAO = 29;
   /** RegularExpression Id. */
-  int SOMA = 30;
+  int ABRIREXP = 30;
   /** RegularExpression Id. */
-  int SUBTRACAO = 31;
+  int FECHAREXP = 31;
   /** RegularExpression Id. */
-  int MULTIPLICACAO = 32;
+  int ABRIRFUNC = 32;
   /** RegularExpression Id. */
-  int DIVISAO = 33;
+  int FECHARFUNC = 33;
   /** RegularExpression Id. */
-  int OPMAIOR = 34;
+  int LITERAL_STRING = 34;
   /** RegularExpression Id. */
-  int OPIGUAL = 35;
+  int CONSTANTE_INT = 35;
   /** RegularExpression Id. */
-  int OPMENOR = 36;
+  int CONSTANTE_FLOAT = 36;
   /** RegularExpression Id. */
-  int OPDIF = 37;
+  int IDENTIFICADOR = 37;
   /** RegularExpression Id. */
-  int OPMAIORIGUAL = 38;
+  int DIGITO = 38;
   /** RegularExpression Id. */
-  int OPMENORIGUAL = 39;
+  int SOMA = 39;
+  /** RegularExpression Id. */
+  int SUBTRACAO = 40;
+  /** RegularExpression Id. */
+  int MULTIPLICACAO = 41;
+  /** RegularExpression Id. */
+  int DIVISAO = 42;
+  /** RegularExpression Id. */
+  int OPMAIOR = 43;
+  /** RegularExpression Id. */
+  int OPIGUAL = 44;
+  /** RegularExpression Id. */
+  int OPMENOR = 45;
+  /** RegularExpression Id. */
+  int OPDIF = 46;
+  /** RegularExpression Id. */
+  int OPMAIORIGUAL = 47;
+  /** RegularExpression Id. */
+  int OPMENORIGUAL = 48;
+  /** RegularExpression Id. */
+  int OPAND = 49;
+  /** RegularExpression Id. */
+  int OPOR = 50;
 
   /** Lexical state. */
   int DEFAULT = 0;
@@ -96,6 +118,13 @@ public interface BrCompilerConstants {
     "\"pet\"",
     "\"repet\"",
     "\";\"",
+    "\"vai-filhao\"",
+    "\"devolva\"",
+    "\",\"",
+    "\"tropa-do-gordao\"",
+    "\"recrutar\"",
+    "\"expulsar\"",
+    "\"tamanho\"",
     "\"gambiarra\"",
     "\"abre-te-sezamo\"",
     "\"fecha-te-sezamo\"",
@@ -111,6 +140,8 @@ public interface BrCompilerConstants {
     "\"da-teus-pulo\"",
     "\"[\"",
     "\"]\"",
+    "\"(\"",
+    "\")\"",
     "<LITERAL_STRING>",
     "<CONSTANTE_INT>",
     "<CONSTANTE_FLOAT>",
@@ -126,9 +157,8 @@ public interface BrCompilerConstants {
     "\"!=\"",
     "\" >=\"",
     "\"<=\"",
-    "\",\"",
-    "\"(\"",
-    "\")\"",
+    "\"&&\"",
+    "\"|\"",
   };
 
 }

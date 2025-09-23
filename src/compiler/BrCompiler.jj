@@ -13,7 +13,7 @@ public class BrCompiler
 {
   private static boolean parserInitialized = false;
 
-  // Mapeamento de tokens para nomes em português
+  // mapeamento de tokens 
   private static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
       case INICIOPROG: return "gambiarra";
@@ -31,10 +31,14 @@ public class BrCompiler
       case SENAO: return "da-teus-pulo";
       case ABRIREXP: return "[";
       case FECHAREXP: return "]";
+      case ABRIRFUNC: return "(";
+      case FECHARFUNC: return ")";
       case PRINT: return "printa";
       case SCAN: return "papa-entrada";
       case FOR: return "pet";
       case WHILE: return "repet";
+      case FUNCAO: return "vai-filhao";
+      case RETURN: return "devolva";
       case SEPARADOR: return ";";
       case SOMA: return "+";
       case SUBTRACAO: return "-";
@@ -43,14 +47,20 @@ public class BrCompiler
       case OPMAIOR: return ">";
       case OPIGUAL: return "==";
       case OPMENOR: return "<";
+      case OPMAIORIGUAL: return ">=";
+      case OPMENORIGUAL: return "<="; 
       case OPDIF: return "!=";
+      case OPAND: return "&&";
+      case OPOR: return "|";
       case IDENTIFICADOR: return "identificador";
       case CONSTANTE_INT: return "numero inteiro";
       case CONSTANTE_FLOAT: return "numero decimal";
       case LITERAL_STRING: return "texto";
-      case 38: return "virgula (,)";
-      case 39: return "parentese aberto (";
-      case 40: return "parentese fechado )";
+      case VIRGULA: return "virgula (,)";
+      case LISTA: return "tropa-do-gordao";
+      case ADICIONAR: return "recrutar";
+      case REMOVER: return "expulsar";
+      case TAMANHO: return "tamanho";
       default: return "token desconhecido";
     }
   }
@@ -134,7 +144,7 @@ public class BrCompiler
  
     while (true)
     {
-        System.out.println("zoacao iniciada");
+        System.out.println("na minha maquina funciona!");
         System.out.print("comece a digitar sua gambiarra:");
         
         try
@@ -204,36 +214,47 @@ SKIP :
 | "\n"
 }
 
-TOKEN : /*funcoes */
+TOKEN : /*funcoes e estru. dados */
 {
   <PRINT: "printa" >			|
   <SCAN: "papa-entrada" >		|
   <FOR: "pet" >					|
   <WHILE: "repet" >				|	
-  <SEPARADOR: ";" >
+  <SEPARADOR: ";" >				|
+  <FUNCAO: "vai-filhao" >		|
+  <RETURN: "devolva">			|
+  <VIRGULA: ",">				|
+  <LISTA: "tropa-do-gordao" >	|
+  <ADICIONAR: "recrutar" >  	|
+  <REMOVER: "expulsar" >  		|  
+  <TAMANHO: "tamanho" >			//"membros da tropa" / informa o tamanho da lista. precisa ser complementado com um print
 }
+
+
 
 TOKEN : /*estruturas*/
 {
-  <INICIOPROG: "gambiarra">											|
-  <ABREBLOCO: "abre-te-sezamo">										|	
-  <FECHABLOCO: "fecha-te-sezamo">									|
-  <INT: "stonks">													|
-  <FLOAT: "fiado">													|
-  <STRING: "textao">												|
-  <BOOL: "eh-migue">												|
-  <TRUE: "sim">														|
-  <FALSE: "nao">													|
-  <ATRIBUICAO: "receba">											|
-  <FIMESTRUTURA: "br">												|
-  <CONDICIONAL: "sepa">												|
-  <SENAO: "da-teus-pulo">											|
-  <ABRIREXP: "[">													|
-  <FECHAREXP: "]">													|
-  <LITERAL_STRING:"\"" (~["\""])* "\"">								|
-  <CONSTANTE_INT: (<DIGITO>)+>										|
-  <CONSTANTE_FLOAT: (<DIGITO>)+ "." (<DIGITO>)+>					|
-  <IDENTIFICADOR: ["a"-"z"] (["a"-"z"] | "-" | "_"| <DIGITO>)*>	|
+  <INICIOPROG: "gambiarra">															|
+  <ABREBLOCO: "abre-te-sezamo">														|	
+  <FECHABLOCO: "fecha-te-sezamo">													|
+  <INT: "stonks">																	|
+  <FLOAT: "fiado">																	|
+  <STRING: "textao">																|
+  <BOOL: "eh-migue">																|
+  <TRUE: "sim">																		|
+  <FALSE: "nao">																	|
+  <ATRIBUICAO: "receba">															|
+  <FIMESTRUTURA: "br">																|
+  <CONDICIONAL: "sepa">																|
+  <SENAO: "da-teus-pulo">															|
+  <ABRIREXP: "[">																	|
+  <FECHAREXP: "]">																	|
+  <ABRIRFUNC: "(">																	|
+  <FECHARFUNC: ")">																	|
+  <LITERAL_STRING:"\"" (~["\""])* "\"">												|
+  <CONSTANTE_INT: (<DIGITO>)+>														|
+  <CONSTANTE_FLOAT: (<DIGITO>)+ "." (<DIGITO>)+>									|
+  <IDENTIFICADOR: ["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z"] | "-" | "_"| <DIGITO>)*>	|
   <#DIGITO : [ "0"-"9" ]> 
 }
 
@@ -248,7 +269,9 @@ TOKEN: /*operacoes*/
  <OPMENOR: "<">											|
  <OPDIF: "!=">											|
  <OPMAIORIGUAL: " >=" >									|
- <OPMENORIGUAL: "<=" >
+ <OPMENORIGUAL: "<=" >									|
+ <OPAND: "&&" >											|
+ <OPOR: "|" >								
 }
 
 
@@ -261,7 +284,7 @@ void main() :
 void bloco():
 {}
 {
- 	(comando())*
+ 	(comando() | declaraFuncao())*
 }
 
 void comando():
@@ -269,12 +292,15 @@ void comando():
 {
    declaraVariavel() 					|
    expressaoCondicional()             	|
+   LOOKAHEAD(3) comandoFuncao()         |
+   LOOKAHEAD(3) operacaoLista()         | 
    LOOKAHEAD(2) atribuicao()			|   //resolve conflito de indecibilidade entre atribuicao e expressao
    Expressao() <FIMESTRUTURA>	 		|
    print()								|
    scan()								|
    whileLoop()							|
-   forLoop()
+   forLoop()							|
+   retorno()
     
 }
 
@@ -292,7 +318,7 @@ void declaraVariavel():
 void tipoDado():
 { }
 {
-  (<INT> | <FLOAT>| <STRING> | <BOOL>)
+  (<INT> | <FLOAT>| <STRING> | <BOOL> | tipoLista())
 
 }
 
@@ -305,7 +331,7 @@ void atribuicao():
 void ListaIdentificadores(): //permite varias declaracoes de variaveis
 { }
 {
-  <IDENTIFICADOR> ("," <IDENTIFICADOR>)*
+  <IDENTIFICADOR> (<VIRGULA> <IDENTIFICADOR>)*
 }
 
 void ListaExpressoes():
@@ -313,7 +339,7 @@ void ListaExpressoes():
 {
   Expressao()
   (
-    "," Expressao()
+    <VIRGULA> Expressao()
   )*
 }
 
@@ -337,22 +363,25 @@ void fator(): { } //fazer respeitar hierarquia de operacoes
   )*
 }
 
-void termo():
+void termo(): 
 {}
 {
-  <IDENTIFICADOR> 		|
-  <CONSTANTE_INT>			|
-  <CONSTANTE_FLOAT>		|
-  <LITERAL_STRING>			|
-  <TRUE>					|
-  <FALSE>					|
+  LOOKAHEAD( <IDENTIFICADOR> <ABRIRFUNC> ) chamadaFuncao()						|
+  <IDENTIFICADOR> (<ABRIREXP> (ListaExpressoes())? <FECHAREXP>)?				|  //essa parte de 0 ou 1 permite a chamada de funcao
+  <CONSTANTE_INT>																|
+  <CONSTANTE_FLOAT>																|
+  <LITERAL_STRING>																|
+  <TRUE>																		|
+  <FALSE>																		|
+  <TAMANHO> <IDENTIFICADOR>                                      				|  
+  inicializacaoLista()                                            				|
   "(" Expressao() ")" 			//reconhecer prioridade de parentese
 }									   
 
 void operadorLogico():
 { }
 {
-  (<OPDIF> | <OPIGUAL> | <OPMAIOR> | <OPMENOR> | <OPMAIORIGUAL> | <OPMENORIGUAL>)
+  (<OPDIF> | <OPIGUAL> | <OPMAIOR> | <OPMENOR> | <OPMAIORIGUAL> | <OPMENORIGUAL> | <OPAND> | <OPOR>)
 }
 
 void expressaoLogica():
@@ -413,4 +442,67 @@ void atribuicaoFor():
 {}
 {
   (tipoDado())? <IDENTIFICADOR> <ATRIBUICAO> Expressao()
+}
+
+//tratar escopo na analise semantica
+void declaraFuncao():  //tipoDado é opcional para permitir funções sem retorno, sem precisar adicionar o tipo void
+{}
+{
+ <FUNCAO> (tipoDado())? <IDENTIFICADOR> <ABRIRFUNC> (listaParametros())? <FECHARFUNC>
+ 						  <ABREBLOCO> bloco() <FECHABLOCO>
+
+//ex: funcao int numeroPrimo [int a, int b ] { comandos }
+}
+
+void listaParametros():
+{}
+{
+  parametro() (<VIRGULA> parametro())*
+}
+
+void parametro():
+{}
+{
+  tipoDado() <IDENTIFICADOR>
+}
+
+void retorno():
+{}
+{
+	<RETURN> (Expressao())?<FIMESTRUTURA>
+}
+
+void chamadaFuncao():
+{}
+{
+  <IDENTIFICADOR> <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC>
+  // ex: somar(5, 10), usada em expressões
+}
+
+// é para chamar funções void criadas pelo usuário
+void comandoFuncao():
+{}
+{
+  
+  <IDENTIFICADOR> <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC> <FIMESTRUTURA>
+  // ex: imprime("oi");  função void como comando
+}
+
+void tipoLista():
+{ }
+{
+  <LISTA> (<INT> | <FLOAT> | <STRING> | <BOOL>) //nao chamei tipoDado pra nao criar recursao infinita de lista int lista int lista int lista 
+}
+
+void inicializacaoLista():
+{}
+{
+  <ABRIREXP> (ListaExpressoes())? <FECHAREXP> // ex: [1, 2, 3]
+}
+
+void operacaoLista():
+{}
+{
+  LOOKAHEAD(2) <IDENTIFICADOR> <ADICIONAR> Expressao() <FIMESTRUTURA> 						|
+  <IDENTIFICADOR> <REMOVER> <ABRIREXP> Expressao() <FECHAREXP> <FIMESTRUTURA>
 }
