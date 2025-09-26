@@ -9,8 +9,8 @@ public class BrCompiler implements BrCompilerConstants {
   private static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
       case INICIOPROG: return "gambiarra";
-      case ABREBLOCO: return "abre-te-sezamo";
-      case FECHABLOCO: return "fecha-te-sezamo";
+      case ABREBLOCO: return "abre-te-sesamo";
+      case FECHABLOCO: return "fecha-te-sesamo";
       case INT: return "stonks";
       case FLOAT: return "fiado";
       case STRING: return "textao";
@@ -53,6 +53,11 @@ public class BrCompiler implements BrCompilerConstants {
       case ADICIONAR: return "recrutar";
       case REMOVER: return "expulsar";
       case TAMANHO: return "tamanho";
+      case PILHA: return "sanduiche-iche";
+      case EMPILHAR: return "montar-sanduba";
+      case DESEMPILHAR: return "comer-sanduba";
+      case TOPO: return "olho-gordo";
+      case PILHA_VAZIA: return "farelo";
       default: return "token desconhecido";
     }
   }
@@ -214,6 +219,9 @@ public class BrCompiler implements BrCompilerConstants {
       case RETURN:
       case LISTA:
       case TAMANHO:
+      case PILHA:
+      case TOPO:
+      case PILHA_VAZIA:
       case INT:
       case FLOAT:
       case STRING:
@@ -242,6 +250,9 @@ public class BrCompiler implements BrCompilerConstants {
       case RETURN:
       case LISTA:
       case TAMANHO:
+      case PILHA:
+      case TOPO:
+      case PILHA_VAZIA:
       case INT:
       case FLOAT:
       case STRING:
@@ -273,6 +284,7 @@ public class BrCompiler implements BrCompilerConstants {
   static final public void comando() throws ParseException {
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case LISTA:
+    case PILHA:
     case INT:
     case FLOAT:
     case STRING:
@@ -290,11 +302,15 @@ public class BrCompiler implements BrCompilerConstants {
         comandoFuncao();
       } else if (jj_2_2(3)) {
         operacaoLista();
-      } else if (jj_2_3(2)) {
+      } else if (jj_2_3(3)) {
+        operacaoPilha();
+      } else if (jj_2_4(2)) {
         atribuicao();
       } else {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
         case TAMANHO:
+        case TOPO:
+        case PILHA_VAZIA:
         case TRUE:
         case FALSE:
         case ABRIREXP:
@@ -372,6 +388,10 @@ public class BrCompiler implements BrCompilerConstants {
       }
     case LISTA:{
       tipoLista();
+      break;
+      }
+    case PILHA:{
+      tipoPilha();
       break;
       }
     default:
@@ -489,7 +509,7 @@ public class BrCompiler implements BrCompilerConstants {
 }
 
   static final public void termo() throws ParseException {
-    if (jj_2_4(2147483647)) {
+    if (jj_2_5(2147483647)) {
       chamadaFuncao();
     } else {
       switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -500,6 +520,8 @@ public class BrCompiler implements BrCompilerConstants {
           jj_consume_token(ABRIREXP);
           switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
           case TAMANHO:
+          case TOPO:
+          case PILHA_VAZIA:
           case TRUE:
           case FALSE:
           case ABRIREXP:
@@ -551,6 +573,16 @@ public class BrCompiler implements BrCompilerConstants {
         }
       case ABRIREXP:{
         inicializacaoLista();
+        break;
+        }
+      case TOPO:{
+        jj_consume_token(TOPO);
+        jj_consume_token(IDENTIFICADOR);
+        break;
+        }
+      case PILHA_VAZIA:{
+        jj_consume_token(PILHA_VAZIA);
+        jj_consume_token(IDENTIFICADOR);
         break;
         }
       case ABRIRFUNC:{
@@ -692,6 +724,7 @@ public class BrCompiler implements BrCompilerConstants {
   static final public void atribuicaoFor() throws ParseException {
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case LISTA:
+    case PILHA:
     case INT:
     case FLOAT:
     case STRING:
@@ -713,6 +746,7 @@ public class BrCompiler implements BrCompilerConstants {
     jj_consume_token(FUNCAO);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case LISTA:
+    case PILHA:
     case INT:
     case FLOAT:
     case STRING:
@@ -728,6 +762,7 @@ public class BrCompiler implements BrCompilerConstants {
     jj_consume_token(ABRIRFUNC);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case LISTA:
+    case PILHA:
     case INT:
     case FLOAT:
     case STRING:
@@ -772,6 +807,8 @@ public class BrCompiler implements BrCompilerConstants {
     jj_consume_token(RETURN);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case TAMANHO:
+    case TOPO:
+    case PILHA_VAZIA:
     case TRUE:
     case FALSE:
     case ABRIREXP:
@@ -795,6 +832,8 @@ public class BrCompiler implements BrCompilerConstants {
     jj_consume_token(ABRIRFUNC);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case TAMANHO:
+    case TOPO:
+    case PILHA_VAZIA:
     case TRUE:
     case FALSE:
     case ABRIREXP:
@@ -813,12 +852,14 @@ public class BrCompiler implements BrCompilerConstants {
     jj_consume_token(FECHARFUNC);
 }
 
-// é para chamar funções void criadas pelo usuário
+// é para chamar funções void criadas pelo usuário. Usada em comandos independentes. Não dá pra usar em expressões
   static final public void comandoFuncao() throws ParseException {
     jj_consume_token(IDENTIFICADOR);
     jj_consume_token(ABRIRFUNC);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case TAMANHO:
+    case TOPO:
+    case PILHA_VAZIA:
     case TRUE:
     case FALSE:
     case ABRIREXP:
@@ -868,6 +909,8 @@ public class BrCompiler implements BrCompilerConstants {
     jj_consume_token(ABRIREXP);
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case TAMANHO:
+    case TOPO:
+    case PILHA_VAZIA:
     case TRUE:
     case FALSE:
     case ABRIREXP:
@@ -887,7 +930,7 @@ public class BrCompiler implements BrCompilerConstants {
 }
 
   static final public void operacaoLista() throws ParseException {
-    if (jj_2_5(2)) {
+    if (jj_2_6(2)) {
       jj_consume_token(IDENTIFICADOR);
       jj_consume_token(ADICIONAR);
       Expressao();
@@ -905,6 +948,54 @@ public class BrCompiler implements BrCompilerConstants {
         }
       default:
         jj_la1[27] = jj_gen;
+        jj_consume_token(-1);
+        throw new ParseException();
+      }
+    }
+}
+
+  static final public void tipoPilha() throws ParseException {
+    jj_consume_token(PILHA);
+    switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+    case INT:{
+      jj_consume_token(INT);
+      break;
+      }
+    case FLOAT:{
+      jj_consume_token(FLOAT);
+      break;
+      }
+    case STRING:{
+      jj_consume_token(STRING);
+      break;
+      }
+    case BOOL:{
+      jj_consume_token(BOOL);
+      break;
+      }
+    default:
+      jj_la1[28] = jj_gen;
+      jj_consume_token(-1);
+      throw new ParseException();
+    }
+}
+
+  static final public void operacaoPilha() throws ParseException {
+    if (jj_2_7(2)) {
+      jj_consume_token(IDENTIFICADOR);
+      jj_consume_token(EMPILHAR);
+      Expressao();
+      jj_consume_token(FIMESTRUTURA);
+    } else {
+      switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
+      case IDENTIFICADOR:{
+        jj_consume_token(IDENTIFICADOR);
+        jj_consume_token(DESEMPILHAR);
+        jj_consume_token(FIMESTRUTURA);
+        break;
+        }
+      default:
+        jj_la1[29] = jj_gen;
         jj_consume_token(-1);
         throw new ParseException();
       }
@@ -951,54 +1042,206 @@ public class BrCompiler implements BrCompilerConstants {
     finally { jj_save(4, xla); }
   }
 
-  static private boolean jj_3R_termo_370_3_17()
+  static private boolean jj_2_6(int xla)
+ {
+    jj_la = xla; jj_lastpos = jj_scanpos = token;
+    try { return (!jj_3_6()); }
+    catch(LookaheadSuccess ls) { return true; }
+    finally { jj_save(5, xla); }
+  }
+
+  static private boolean jj_2_7(int xla)
+ {
+    jj_la = xla; jj_lastpos = jj_scanpos = token;
+    try { return (!jj_3_7()); }
+    catch(LookaheadSuccess ls) { return true; }
+    finally { jj_save(6, xla); }
+  }
+
+  static private boolean jj_3R_Expressao_364_3_15()
+ {
+    if (jj_3R_fator_373_4_16()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_comandoFuncao_503_3_7()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(ABRIRFUNC)) return true;
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_comandoFuncao_503_32_11()) jj_scanpos = xsp;
+    if (jj_scan_token(FECHARFUNC)) return true;
+    return false;
+  }
+
+  static private boolean jj_3_4()
+ {
+    if (jj_3R_atribuicao_342_3_10()) return true;
+    return false;
+  }
+
+  static private boolean jj_3_3()
+ {
+    if (jj_3R_operacaoPilha_535_3_9()) return true;
+    return false;
+  }
+
+  static private boolean jj_3_2()
+ {
+    if (jj_3R_operacaoLista_522_3_8()) return true;
+    return false;
+  }
+
+  static private boolean jj_3_1()
+ {
+    if (jj_3R_comandoFuncao_503_3_7()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_ListaExpressoes_354_3_14()
+ {
+    if (jj_3R_Expressao_364_3_15()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_chamadaFuncao_494_3_25()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_369_3_15()
+  static private boolean jj_3R_operacaoPilha_536_3_13()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(DESEMPILHAR)) return true;
+    if (jj_scan_token(FIMESTRUTURA)) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_termo_394_3_24()
+ {
+    if (jj_scan_token(ABRIRFUNC)) return true;
+    return false;
+  }
+
+  static private boolean jj_3_5()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(ABRIRFUNC)) return true;
+    return false;
+  }
+
+  static private boolean jj_3_7()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(EMPILHAR)) return true;
+    if (jj_3R_Expressao_364_3_15()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_operacaoPilha_535_3_9()
  {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_termo_369_3_16()) {
+    if (jj_3_7()) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_370_3_17()) {
-    jj_scanpos = xsp;
-    if (jj_scan_token(35)) {
-    jj_scanpos = xsp;
-    if (jj_scan_token(36)) {
-    jj_scanpos = xsp;
-    if (jj_scan_token(34)) {
-    jj_scanpos = xsp;
-    if (jj_scan_token(24)) {
-    jj_scanpos = xsp;
-    if (jj_scan_token(25)) {
-    jj_scanpos = xsp;
-    if (jj_3R_termo_376_3_18()) {
-    jj_scanpos = xsp;
-    if (jj_3R_termo_377_3_19()) {
-    jj_scanpos = xsp;
-    if (jj_3R_termo_378_3_20()) return true;
-    }
-    }
-    }
-    }
-    }
-    }
-    }
-    }
+    if (jj_3R_operacaoPilha_536_3_13()) return true;
     }
     return false;
   }
 
-  static private boolean jj_3R_termo_369_3_16()
+  static private boolean jj_3R_termo_393_3_23()
  {
-    if (jj_3R_chamadaFuncao_478_3_21()) return true;
+    if (jj_scan_token(PILHA_VAZIA)) return true;
     return false;
   }
 
-  static private boolean jj_3R_operacaoLista_507_3_11()
+  static private boolean jj_3R_termo_392_3_22()
+ {
+    if (jj_scan_token(TOPO)) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_termo_391_3_21()
+ {
+    if (jj_3R_inicializacaoLista_516_3_26()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_comandoFuncao_503_32_11()
+ {
+    if (jj_3R_ListaExpressoes_354_3_14()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_termo_390_3_20()
+ {
+    if (jj_scan_token(TAMANHO)) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_atribuicao_342_3_10()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(ATRIBUICAO)) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_termo_384_3_19()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_termo_383_3_18()
+ {
+    if (jj_3R_chamadaFuncao_494_3_25()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_termo_383_3_17()
+ {
+    Token xsp;
+    xsp = jj_scanpos;
+    if (jj_3R_termo_383_3_18()) {
+    jj_scanpos = xsp;
+    if (jj_3R_termo_384_3_19()) {
+    jj_scanpos = xsp;
+    if (jj_scan_token(40)) {
+    jj_scanpos = xsp;
+    if (jj_scan_token(41)) {
+    jj_scanpos = xsp;
+    if (jj_scan_token(39)) {
+    jj_scanpos = xsp;
+    if (jj_scan_token(29)) {
+    jj_scanpos = xsp;
+    if (jj_scan_token(30)) {
+    jj_scanpos = xsp;
+    if (jj_3R_termo_390_3_20()) {
+    jj_scanpos = xsp;
+    if (jj_3R_termo_391_3_21()) {
+    jj_scanpos = xsp;
+    if (jj_3R_termo_392_3_22()) {
+    jj_scanpos = xsp;
+    if (jj_3R_termo_393_3_23()) {
+    jj_scanpos = xsp;
+    if (jj_3R_termo_394_3_24()) return true;
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    }
+    return false;
+  }
+
+  static private boolean jj_3R_operacaoLista_523_3_12()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(REMOVER)) return true;
@@ -1006,119 +1249,34 @@ public class BrCompiler implements BrCompilerConstants {
     return false;
   }
 
-  static private boolean jj_3R_operacaoLista_506_3_8()
+  static private boolean jj_3_6()
+ {
+    if (jj_scan_token(IDENTIFICADOR)) return true;
+    if (jj_scan_token(ADICIONAR)) return true;
+    if (jj_3R_Expressao_364_3_15()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_operacaoLista_522_3_8()
  {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3_5()) {
+    if (jj_3_6()) {
     jj_scanpos = xsp;
-    if (jj_3R_operacaoLista_507_3_11()) return true;
+    if (jj_3R_operacaoLista_523_3_12()) return true;
     }
     return false;
   }
 
-  static private boolean jj_3_5()
- {
-    if (jj_scan_token(IDENTIFICADOR)) return true;
-    if (jj_scan_token(ADICIONAR)) return true;
-    if (jj_3R_Expressao_350_3_13()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_fator_359_4_14()
- {
-    if (jj_3R_termo_369_3_15()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_inicializacaoLista_500_3_22()
+  static private boolean jj_3R_inicializacaoLista_516_3_26()
  {
     if (jj_scan_token(ABRIREXP)) return true;
     return false;
   }
 
-  static private boolean jj_3R_Expressao_350_3_13()
+  static private boolean jj_3R_fator_373_4_16()
  {
-    if (jj_3R_fator_359_4_14()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_comandoFuncao_487_3_7()
- {
-    if (jj_scan_token(IDENTIFICADOR)) return true;
-    if (jj_scan_token(ABRIRFUNC)) return true;
-    Token xsp;
-    xsp = jj_scanpos;
-    if (jj_3R_comandoFuncao_487_32_10()) jj_scanpos = xsp;
-    if (jj_scan_token(FECHARFUNC)) return true;
-    return false;
-  }
-
-  static private boolean jj_3_3()
- {
-    if (jj_3R_atribuicao_328_3_9()) return true;
-    return false;
-  }
-
-  static private boolean jj_3_2()
- {
-    if (jj_3R_operacaoLista_506_3_8()) return true;
-    return false;
-  }
-
-  static private boolean jj_3_1()
- {
-    if (jj_3R_comandoFuncao_487_3_7()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_ListaExpressoes_340_3_12()
- {
-    if (jj_3R_Expressao_350_3_13()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_chamadaFuncao_478_3_21()
- {
-    if (jj_scan_token(IDENTIFICADOR)) return true;
-    return false;
-  }
-
-  static private boolean jj_3_4()
- {
-    if (jj_scan_token(IDENTIFICADOR)) return true;
-    if (jj_scan_token(ABRIRFUNC)) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_termo_378_3_20()
- {
-    if (jj_scan_token(ABRIRFUNC)) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_termo_377_3_19()
- {
-    if (jj_3R_inicializacaoLista_500_3_22()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_termo_376_3_18()
- {
-    if (jj_scan_token(TAMANHO)) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_atribuicao_328_3_9()
- {
-    if (jj_scan_token(IDENTIFICADOR)) return true;
-    if (jj_scan_token(ATRIBUICAO)) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_comandoFuncao_487_32_10()
- {
-    if (jj_3R_ListaExpressoes_340_3_12()) return true;
+    if (jj_3R_termo_383_3_17()) return true;
     return false;
   }
 
@@ -1134,7 +1292,7 @@ public class BrCompiler implements BrCompilerConstants {
   static private Token jj_scanpos, jj_lastpos;
   static private int jj_la;
   static private int jj_gen;
-  static final private int[] jj_la1 = new int[28];
+  static final private int[] jj_la1 = new int[30];
   static private int[] jj_la1_0;
   static private int[] jj_la1_1;
   static {
@@ -1142,12 +1300,12 @@ public class BrCompiler implements BrCompilerConstants {
 	   jj_la1_init_1();
 	}
 	private static void jj_la1_init_0() {
-	   jj_la1_0 = new int[] {0x53f12de0,0x53f12de0,0x10f02000,0x430109e0,0x4000000,0xf02000,0x1000,0x1000,0x0,0x0,0x0,0x0,0x43010000,0x40000000,0x43010000,0x0,0x10040000,0x20000000,0xf02000,0xf02000,0xf02000,0x1000,0x43010000,0x43010000,0x43010000,0xf00000,0x43010000,0x0,};
+	   jj_la1_0 = new int[] {0x7e332de0,0x7e332de0,0x1e022000,0x603109e0,0x80000000,0x1e022000,0x1000,0x1000,0x0,0x0,0x0,0x0,0x60310000,0x0,0x60310000,0x0,0x800000,0x0,0x1e022000,0x1e022000,0x1e022000,0x1000,0x60310000,0x60310000,0x60310000,0x1e000000,0x60310000,0x0,0x1e000000,0x0,};
 	}
 	private static void jj_la1_init_1() {
-	   jj_la1_1 = new int[] {0x3d,0x3d,0x0,0x3d,0x0,0x0,0x0,0x0,0x180,0x180,0x600,0x600,0x3d,0x0,0x3d,0x7f800,0x0,0x0,0x0,0x0,0x0,0x0,0x3d,0x3d,0x3d,0x0,0x3d,0x20,};
+	   jj_la1_1 = new int[] {0x7aa,0x7aa,0x2,0x7a8,0x0,0x0,0x0,0x0,0x3000,0x3000,0xc000,0xc000,0x7a8,0x8,0x7a8,0xff0000,0x2,0x4,0x0,0x0,0x0,0x0,0x7a8,0x7a8,0x7a8,0x0,0x7a8,0x400,0x0,0x400,};
 	}
-  static final private JJCalls[] jj_2_rtns = new JJCalls[5];
+  static final private JJCalls[] jj_2_rtns = new JJCalls[7];
   static private boolean jj_rescan = false;
   static private int jj_gc = 0;
 
@@ -1169,7 +1327,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 28; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 30; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1184,7 +1342,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 28; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 30; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1202,7 +1360,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 28; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 30; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1221,7 +1379,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 28; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 30; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1238,7 +1396,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 28; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 30; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1248,7 +1406,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 token = new Token();
 	 jj_ntk = -1;
 	 jj_gen = 0;
-	 for (int i = 0; i < 28; i++) jj_la1[i] = -1;
+	 for (int i = 0; i < 30; i++) jj_la1[i] = -1;
 	 for (int i = 0; i < jj_2_rtns.length; i++) jj_2_rtns[i] = new JJCalls();
   }
 
@@ -1379,12 +1537,12 @@ public class BrCompiler implements BrCompilerConstants {
   /** Generate ParseException. */
   static public ParseException generateParseException() {
 	 jj_expentries.clear();
-	 boolean[] la1tokens = new boolean[51];
+	 boolean[] la1tokens = new boolean[56];
 	 if (jj_kind >= 0) {
 	   la1tokens[jj_kind] = true;
 	   jj_kind = -1;
 	 }
-	 for (int i = 0; i < 28; i++) {
+	 for (int i = 0; i < 30; i++) {
 	   if (jj_la1[i] == jj_gen) {
 		 for (int j = 0; j < 32; j++) {
 		   if ((jj_la1_0[i] & (1<<j)) != 0) {
@@ -1396,7 +1554,7 @@ public class BrCompiler implements BrCompilerConstants {
 		 }
 	   }
 	 }
-	 for (int i = 0; i < 51; i++) {
+	 for (int i = 0; i < 56; i++) {
 	   if (la1tokens[i]) {
 		 jj_expentry = new int[1];
 		 jj_expentry[0] = i;
@@ -1430,7 +1588,7 @@ public class BrCompiler implements BrCompilerConstants {
 
   static private void jj_rescan_token() {
 	 jj_rescan = true;
-	 for (int i = 0; i < 5; i++) {
+	 for (int i = 0; i < 7; i++) {
 	   try {
 		 JJCalls p = jj_2_rtns[i];
 
@@ -1443,6 +1601,8 @@ public class BrCompiler implements BrCompilerConstants {
 			   case 2: jj_3_3(); break;
 			   case 3: jj_3_4(); break;
 			   case 4: jj_3_5(); break;
+			   case 5: jj_3_6(); break;
+			   case 6: jj_3_7(); break;
 			 }
 		   }
 		   p = p.next;

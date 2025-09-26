@@ -17,8 +17,8 @@ public class BrCompiler
   private static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
       case INICIOPROG: return "gambiarra";
-      case ABREBLOCO: return "abre-te-sezamo";
-      case FECHABLOCO: return "fecha-te-sezamo";
+      case ABREBLOCO: return "abre-te-sesamo";
+      case FECHABLOCO: return "fecha-te-sesamo";
       case INT: return "stonks";
       case FLOAT: return "fiado";
       case STRING: return "textao";
@@ -61,6 +61,11 @@ public class BrCompiler
       case ADICIONAR: return "recrutar";
       case REMOVER: return "expulsar";
       case TAMANHO: return "tamanho";
+      case PILHA: return "sanduiche-iche";
+      case EMPILHAR: return "montar-sanduba";
+      case DESEMPILHAR: return "comer-sanduba";
+      case TOPO: return "olho-gordo";
+      case PILHA_VAZIA: return "farelo";
       default: return "token desconhecido";
     }
   }
@@ -223,20 +228,28 @@ TOKEN : /*funcoes e estru. dados */
   <SEPARADOR: ";" >				|
   <FUNCAO: "vai-filhao" >		|
   <RETURN: "devolva">			|
-  <VIRGULA: ",">				|
-  <LISTA: "tropa-do-gordao" >	|
-  <ADICIONAR: "recrutar" >  	|
-  <REMOVER: "expulsar" >  		|  
-  <TAMANHO: "tamanho" >			//"membros da tropa" / informa o tamanho da lista. precisa ser complementado com um print
+  <VIRGULA: ",">				
+  
 }
 
-
+TOKEN : /*estrururas de dados*/
+{
+  <LISTA: "tropa-do-gordao" >		| //"membros da tropa" / informa o tamanho da lista. precisa ser complementado com um print
+  <ADICIONAR: "recrutar" >  		|
+  <REMOVER: "expulsar" >  			|  
+  <TAMANHO: "tamanho" >				| 
+  <PILHA: "sanduiche-iche" >    	|
+  <EMPILHAR: "montar-sanduba">		|
+  <DESEMPILHAR: "comer-sanduba">  	|
+  <TOPO: "olho-gordo">				|
+  <PILHA_VAZIA: "farelo">
+}
 
 TOKEN : /*estruturas*/
 {
   <INICIOPROG: "gambiarra">															|
-  <ABREBLOCO: "abre-te-sezamo">														|	
-  <FECHABLOCO: "fecha-te-sezamo">													|
+  <ABREBLOCO: "abre-te-sesamo">														|	
+  <FECHABLOCO: "fecha-te-sesamo">													|
   <INT: "stonks">																	|
   <FLOAT: "fiado">																	|
   <STRING: "textao">																|
@@ -293,7 +306,8 @@ void comando():
    declaraVariavel() 					|
    expressaoCondicional()             	|
    LOOKAHEAD(3) comandoFuncao()         |
-   LOOKAHEAD(3) operacaoLista()         | 
+   LOOKAHEAD(3) operacaoLista()         |
+   LOOKAHEAD(3) operacaoPilha()			|
    LOOKAHEAD(2) atribuicao()			|   //resolve conflito de indecibilidade entre atribuicao e expressao
    Expressao() <FIMESTRUTURA>	 		|
    print()								|
@@ -318,7 +332,7 @@ void declaraVariavel():
 void tipoDado():
 { }
 {
-  (<INT> | <FLOAT>| <STRING> | <BOOL> | tipoLista())
+  (<INT> | <FLOAT>| <STRING> | <BOOL> | tipoLista() | tipoPilha())
 
 }
 
@@ -367,7 +381,7 @@ void termo():
 {}
 {
   LOOKAHEAD( <IDENTIFICADOR> <ABRIRFUNC> ) chamadaFuncao()						|
-  <IDENTIFICADOR> (<ABRIREXP> (ListaExpressoes())? <FECHAREXP>)?				|  //essa parte de 0 ou 1 permite a chamada de funcao
+  <IDENTIFICADOR> (<ABRIREXP> (ListaExpressoes())? <FECHAREXP>)?				| 
   <CONSTANTE_INT>																|
   <CONSTANTE_FLOAT>																|
   <LITERAL_STRING>																|
@@ -375,6 +389,8 @@ void termo():
   <FALSE>																		|
   <TAMANHO> <IDENTIFICADOR>                                      				|  
   inicializacaoLista()                                            				|
+  <TOPO> <IDENTIFICADOR>														|
+  <PILHA_VAZIA> <IDENTIFICADOR>													|
   "(" Expressao() ")" 			//reconhecer prioridade de parentese
 }									   
 
@@ -472,14 +488,14 @@ void retorno():
 	<RETURN> (Expressao())?<FIMESTRUTURA>
 }
 
-void chamadaFuncao():
+void chamadaFuncao(): //usa em expressoes, que exigem que a funcao retorne tipo
 {}
 {
   <IDENTIFICADOR> <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC>
   // ex: somar(5, 10), usada em expressões
 }
 
-// é para chamar funções void criadas pelo usuário
+// é para chamar funções void criadas pelo usuário. Usada em comandos independentes. Não dá pra usar em expressões
 void comandoFuncao():
 {}
 {
@@ -503,6 +519,20 @@ void inicializacaoLista():
 void operacaoLista():
 {}
 {
-  LOOKAHEAD(2) <IDENTIFICADOR> <ADICIONAR> Expressao() <FIMESTRUTURA> 						|
+  LOOKAHEAD(2) <IDENTIFICADOR> <ADICIONAR> Expressao() <FIMESTRUTURA> 			|
   <IDENTIFICADOR> <REMOVER> <ABRIREXP> Expressao() <FECHAREXP> <FIMESTRUTURA>
 }
+
+void tipoPilha():
+{}
+{
+  <PILHA> (<INT> | <FLOAT> | <STRING> | <BOOL>)
+}
+
+void operacaoPilha():
+{}
+{
+  LOOKAHEAD(2) <IDENTIFICADOR> <EMPILHAR> Expressao() <FIMESTRUTURA>     |  
+  <IDENTIFICADOR> <DESEMPILHAR> <FIMESTRUTURA>								//desempilhar precisa da parte semantica
+}
+
