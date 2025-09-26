@@ -116,6 +116,106 @@ public class BrCompiler implements BrCompilerConstants {
     }
 }
 
+//metodo pra tratar os erros léxicos em pt br
+
+private static void handleTokenMgrError(TokenMgrError e) {
+    String msg = e.getMessage();
+
+    int linha = 1;
+    int coluna = 1;
+    String charEncontrado = "?";
+    boolean problemaNoEspaco = false;
+
+    try {
+        // extrair linha e coluna
+        String[] partes = msg.split(" ");
+        for (int i = 0; i < partes.length; i++) {
+            if (partes[i].equals("line") && i + 1 < partes.length) {
+                linha = Integer.parseInt(partes[i + 1].replace(",", ""));
+            }
+            if (partes[i].equals("column") && i + 1 < partes.length) {
+                coluna = Integer.parseInt(partes[i + 1].replace(".", ""));
+            }
+        }
+
+
+        if (msg.contains("after prefix")) {
+
+            int start = msg.indexOf("after prefix \"") + 14;
+            int end = msg.indexOf("\"", start);
+            if (start > 13 && end > start) {
+                String prefixo = msg.substring(start, end);
+                charEncontrado = prefixo;
+
+                coluna = Math.max(1, coluna - prefixo.length());
+            }
+        } else if (msg.contains("Encountered:") && msg.contains("(")) {
+
+            int parenteseAbre = msg.lastIndexOf("(");
+            int parenteseFecha = msg.indexOf(")", parenteseAbre);
+
+            if (parenteseAbre != -1 && parenteseFecha != -1) {
+                String codigoStr = msg.substring(parenteseAbre + 1, parenteseFecha).trim();
+
+                if (codigoStr.matches("\\d+")) {
+                    try {
+                        int codigoAscii = Integer.parseInt(codigoStr);
+                        charEncontrado = Character.toString((char) codigoAscii);
+
+
+                        if (codigoAscii == 32 && !msg.contains("after prefix")) {
+                            problemaNoEspaco = true;
+                        }
+                    } catch (NumberFormatException ex) {
+                        charEncontrado = codigoStr;
+                    }
+                } else {
+                    charEncontrado = codigoStr;
+                }
+            }
+        } else {
+
+            int aspasAbre = msg.indexOf("'");
+            int aspasFecha = msg.indexOf("'", aspasAbre + 1);
+            if (aspasAbre != -1 && aspasFecha != -1) {
+                charEncontrado = msg.substring(aspasAbre + 1, aspasFecha);
+            }
+        }
+
+
+
+    } catch (Exception ex) {
+        // manter valores padrao
+    }
+
+    if (charEncontrado.startsWith("'") && charEncontrado.endsWith("'") && charEncontrado.length() > 1) {
+        charEncontrado = charEncontrado.substring(1, charEncontrado.length() - 1);
+    }
+
+    System.out.println("NOK.");
+    System.out.println("Caractere inv\u00e1lido '" + charEncontrado + "' encontrado na linha " + linha + ", coluna " + coluna);
+
+//sugestoes pre prontas
+    if (charEncontrado.equals("=")) {
+        System.out.println("Sugest\u00e3o: Use 'receba' para atribui\u00e7\u00e3o em vez de '='");
+    } else if (charEncontrado.equals("@")) {
+        System.out.println("Sugest\u00e3o: Caractere '@' n\u00e3o \u00e9 permitido. Use apenas caracteres v\u00e1lidos");
+    }  else if (charEncontrado.equals("?")) {
+        System.out.println("Sugest\u00e3o: Ponto de interroga\u00e7\u00e3o n\u00e3o \u00e9 um operador v\u00e1lido");
+    } else if (charEncontrado.equals(":")) {
+        System.out.println("Sugest\u00e3o: Dois pontos n\u00e3o s\u00e3o usados na linguagem");
+    } else if (charEncontrado.equals("'")) {
+        System.out.println("Sugest\u00e3o: Utilize aspas duplas para strings");
+    } else if (charEncontrado.equals("!")) {
+        System.out.println("Sugest\u00e3o: Use '!=' para diferen\u00e7a, ou verifique a sintaxe");
+    } else {
+        System.out.println("Sugest\u00e3o: Use apenas letras, n\u00fameros e os operadores definidos na linguagem");
+    }
+
+}
+
+
+
   public static int one_line() throws ParseException {
       try {
         if (!parserInitialized) {
@@ -131,6 +231,7 @@ public class BrCompiler implements BrCompilerConstants {
           throw e;
       }
   }
+
 
   public static void main(String args []) throws ParseException
 {
@@ -173,8 +274,8 @@ public class BrCompiler implements BrCompilerConstants {
         }
         catch (TokenMgrError e)
         {
-            System.out.println("NOK.");
-            System.out.println("ERRO L\u00c9XICO: Caractere inv\u00e1lido encontrado - " + e.getMessage());
+                handleTokenMgrError(e);
+
             //  limpeza é feita aqui tb:
             try {
                 while (System.in.available() > 0) {
@@ -1058,60 +1159,54 @@ public class BrCompiler implements BrCompilerConstants {
     finally { jj_save(6, xla); }
   }
 
-  static private boolean jj_3R_Expressao_364_3_15()
- {
-    if (jj_3R_fator_373_4_16()) return true;
-    return false;
-  }
-
-  static private boolean jj_3R_comandoFuncao_503_3_7()
+  static private boolean jj_3R_comandoFuncao_606_3_7()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(ABRIRFUNC)) return true;
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_comandoFuncao_503_32_11()) jj_scanpos = xsp;
+    if (jj_3R_comandoFuncao_606_32_11()) jj_scanpos = xsp;
     if (jj_scan_token(FECHARFUNC)) return true;
     return false;
   }
 
   static private boolean jj_3_4()
  {
-    if (jj_3R_atribuicao_342_3_10()) return true;
+    if (jj_3R_atribuicao_445_3_10()) return true;
     return false;
   }
 
   static private boolean jj_3_3()
  {
-    if (jj_3R_operacaoPilha_535_3_9()) return true;
+    if (jj_3R_operacaoPilha_638_3_9()) return true;
     return false;
   }
 
   static private boolean jj_3_2()
  {
-    if (jj_3R_operacaoLista_522_3_8()) return true;
+    if (jj_3R_operacaoLista_625_3_8()) return true;
     return false;
   }
 
   static private boolean jj_3_1()
  {
-    if (jj_3R_comandoFuncao_503_3_7()) return true;
+    if (jj_3R_comandoFuncao_606_3_7()) return true;
     return false;
   }
 
-  static private boolean jj_3R_ListaExpressoes_354_3_14()
+  static private boolean jj_3R_ListaExpressoes_457_3_14()
  {
-    if (jj_3R_Expressao_364_3_15()) return true;
+    if (jj_3R_Expressao_467_3_15()) return true;
     return false;
   }
 
-  static private boolean jj_3R_chamadaFuncao_494_3_25()
+  static private boolean jj_3R_chamadaFuncao_597_3_25()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     return false;
   }
 
-  static private boolean jj_3R_operacaoPilha_536_3_13()
+  static private boolean jj_3R_operacaoPilha_639_3_13()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(DESEMPILHAR)) return true;
@@ -1119,7 +1214,7 @@ public class BrCompiler implements BrCompilerConstants {
     return false;
   }
 
-  static private boolean jj_3R_termo_394_3_24()
+  static private boolean jj_3R_termo_497_3_24()
  {
     if (jj_scan_token(ABRIRFUNC)) return true;
     return false;
@@ -1136,77 +1231,77 @@ public class BrCompiler implements BrCompilerConstants {
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(EMPILHAR)) return true;
-    if (jj_3R_Expressao_364_3_15()) return true;
+    if (jj_3R_Expressao_467_3_15()) return true;
     return false;
   }
 
-  static private boolean jj_3R_operacaoPilha_535_3_9()
+  static private boolean jj_3R_operacaoPilha_638_3_9()
  {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3_7()) {
     jj_scanpos = xsp;
-    if (jj_3R_operacaoPilha_536_3_13()) return true;
+    if (jj_3R_operacaoPilha_639_3_13()) return true;
     }
     return false;
   }
 
-  static private boolean jj_3R_termo_393_3_23()
+  static private boolean jj_3R_termo_496_3_23()
  {
     if (jj_scan_token(PILHA_VAZIA)) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_392_3_22()
+  static private boolean jj_3R_termo_495_3_22()
  {
     if (jj_scan_token(TOPO)) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_391_3_21()
+  static private boolean jj_3R_termo_494_3_21()
  {
-    if (jj_3R_inicializacaoLista_516_3_26()) return true;
+    if (jj_3R_inicializacaoLista_619_3_26()) return true;
     return false;
   }
 
-  static private boolean jj_3R_comandoFuncao_503_32_11()
+  static private boolean jj_3R_comandoFuncao_606_32_11()
  {
-    if (jj_3R_ListaExpressoes_354_3_14()) return true;
+    if (jj_3R_ListaExpressoes_457_3_14()) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_390_3_20()
+  static private boolean jj_3R_termo_493_3_20()
  {
     if (jj_scan_token(TAMANHO)) return true;
     return false;
   }
 
-  static private boolean jj_3R_atribuicao_342_3_10()
+  static private boolean jj_3R_atribuicao_445_3_10()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(ATRIBUICAO)) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_384_3_19()
+  static private boolean jj_3R_termo_487_3_19()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_383_3_18()
+  static private boolean jj_3R_termo_486_3_18()
  {
-    if (jj_3R_chamadaFuncao_494_3_25()) return true;
+    if (jj_3R_chamadaFuncao_597_3_25()) return true;
     return false;
   }
 
-  static private boolean jj_3R_termo_383_3_17()
+  static private boolean jj_3R_termo_486_3_17()
  {
     Token xsp;
     xsp = jj_scanpos;
-    if (jj_3R_termo_383_3_18()) {
+    if (jj_3R_termo_486_3_18()) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_384_3_19()) {
+    if (jj_3R_termo_487_3_19()) {
     jj_scanpos = xsp;
     if (jj_scan_token(40)) {
     jj_scanpos = xsp;
@@ -1218,15 +1313,15 @@ public class BrCompiler implements BrCompilerConstants {
     jj_scanpos = xsp;
     if (jj_scan_token(30)) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_390_3_20()) {
+    if (jj_3R_termo_493_3_20()) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_391_3_21()) {
+    if (jj_3R_termo_494_3_21()) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_392_3_22()) {
+    if (jj_3R_termo_495_3_22()) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_393_3_23()) {
+    if (jj_3R_termo_496_3_23()) {
     jj_scanpos = xsp;
-    if (jj_3R_termo_394_3_24()) return true;
+    if (jj_3R_termo_497_3_24()) return true;
     }
     }
     }
@@ -1241,7 +1336,7 @@ public class BrCompiler implements BrCompilerConstants {
     return false;
   }
 
-  static private boolean jj_3R_operacaoLista_523_3_12()
+  static private boolean jj_3R_operacaoLista_626_3_12()
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(REMOVER)) return true;
@@ -1253,30 +1348,36 @@ public class BrCompiler implements BrCompilerConstants {
  {
     if (jj_scan_token(IDENTIFICADOR)) return true;
     if (jj_scan_token(ADICIONAR)) return true;
-    if (jj_3R_Expressao_364_3_15()) return true;
+    if (jj_3R_Expressao_467_3_15()) return true;
     return false;
   }
 
-  static private boolean jj_3R_operacaoLista_522_3_8()
+  static private boolean jj_3R_operacaoLista_625_3_8()
  {
     Token xsp;
     xsp = jj_scanpos;
     if (jj_3_6()) {
     jj_scanpos = xsp;
-    if (jj_3R_operacaoLista_523_3_12()) return true;
+    if (jj_3R_operacaoLista_626_3_12()) return true;
     }
     return false;
   }
 
-  static private boolean jj_3R_inicializacaoLista_516_3_26()
+  static private boolean jj_3R_inicializacaoLista_619_3_26()
  {
     if (jj_scan_token(ABRIREXP)) return true;
     return false;
   }
 
-  static private boolean jj_3R_fator_373_4_16()
+  static private boolean jj_3R_fator_476_4_16()
  {
-    if (jj_3R_termo_383_3_17()) return true;
+    if (jj_3R_termo_486_3_17()) return true;
+    return false;
+  }
+
+  static private boolean jj_3R_Expressao_467_3_15()
+ {
+    if (jj_3R_fator_476_4_16()) return true;
     return false;
   }
 
@@ -1632,4 +1733,7 @@ public class BrCompiler implements BrCompilerConstants {
 	 JJCalls next;
   }
 
-}
+ //main
+
+} //compilador
+
