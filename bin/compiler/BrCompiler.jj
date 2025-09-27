@@ -9,8 +9,13 @@ options
 PARSER_BEGIN(BrCompiler)
 package compiler;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+
 public class BrCompiler
 {
+  
   private static boolean parserInitialized = false;
 
   // mapeamento de tokens 
@@ -70,8 +75,67 @@ public class BrCompiler
     }
   }
 
-  // metodo pra gerar mensagens de erro em portugues
- public static void handleParseError(ParseException e) {
+//conta cada delimitador de bloco aberto
+private static int verificarBlocos(String input) {
+    int nivel = 0;
+    String[] tokens = input.split("\\s+");
+    
+    for (String token : tokens) {
+        if (token.equals("abre-te-sesamo")) {
+            nivel++;
+        } else if (token.equals("fecha-te-sesamo")) {
+            nivel--;
+            if (nivel < 0) {
+                return -1; // erro: fechamento sem abertura
+            }
+        }
+    }
+    return nivel; // 0 = balanceado, >0 = blocos não fechados
+}
+
+
+// metodo pra tratar erros e gerar mensagens de erro em portugues
+public static void handleParseError(ParseException e) {
+    // Detecção melhorada para bloco não fechado
+    boolean blocoNaoFechado = false;
+    
+    if (e.currentToken != null) {
+        // Caso 1: Token atual é EOF - chegamos ao fim sem fechar o bloco
+        if (e.currentToken.kind == EOF) {
+            blocoNaoFechado = true;
+        }
+        // Caso 2: Próximo token é EOF - estamos no último token antes do fim
+        else if (e.currentToken.next != null && e.currentToken.next.kind == EOF) {
+            blocoNaoFechado = true;
+        }
+        // Caso 3: Verifica se estava esperando FECHABLOCO mas não encontrou
+        else if (e.expectedTokenSequences != null) {
+            for (int[] sequence : e.expectedTokenSequences) {
+                for (int tokenType : sequence) {
+                    if (tokenType == FECHABLOCO) {
+                        blocoNaoFechado = true;
+                        break;
+                    }
+                }
+                if (blocoNaoFechado) break;
+            }
+        }
+    }
+    
+    if (blocoNaoFechado) {
+        System.out.println("NOK.");
+        System.out.println("ERRO DE SINTAXE: Bloco não fechado");
+        System.out.println("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando");
+        
+        // Tenta dar uma posição mais específica
+        if (e.currentToken != null) {
+            System.out.println("Erro detectado próximo à linha " + e.currentToken.beginLine + 
+                             ", coluna " + e.currentToken.beginColumn);
+        }
+        return;
+    }
+    
+    // Resto do método para outros tipos de erro
     System.out.println("NOK.");
     System.out.println("ERRO DE SINTAXE:");
     
@@ -80,24 +144,22 @@ public class BrCompiler
     
     // tenta obter as info do token encontrado
     if (currentToken != null && currentToken.next != null) {
-        tokenEncontrado = currentToken.next;  // O próximo token é o que causou o erro
+        tokenEncontrado = currentToken.next;
     } else if (currentToken != null) {
         tokenEncontrado = currentToken;
     } else {
-        // se currentToken é null, tenta pegar do token_source
         try {
-            tokenEncontrado = getToken(1);  // pega o prox token
+            tokenEncontrado = getToken(1);
         } catch (Exception ex) {
-            // se n der usa info do proprio erro
             tokenEncontrado = null;
         }
     }
     
     // aqui mostra informacoes do token que encontrou
     if (tokenEncontrado != null && tokenEncontrado.image != null) {
-        System.out.println("Token encontrado: '" + tokenEncontrado.image + "' na linha " + tokenEncontrado.beginLine + ", coluna " + tokenEncontrado.beginColumn);
+        System.out.println("Token encontrado: '" + tokenEncontrado.image + "' na linha " + 
+                         tokenEncontrado.beginLine + ", coluna " + tokenEncontrado.beginColumn);
     } else {
-        // ultima tentativa é extrair do token atual (se possivel)
         if (currentToken != null) {
             String tokenImage = currentToken.image != null ? currentToken.image : "EOF";
             int linha = currentToken.beginLine > 0 ? currentToken.beginLine : 1;
@@ -201,6 +263,7 @@ private static void handleTokenMgrError(TokenMgrError e) {
     }
 
     System.out.println("NOK.");
+    System.out.println("ERRO LÉXICO");
     System.out.println("Caractere inválido '" + charEncontrado + "' encontrado na linha " + linha + ", coluna " + coluna);
     
 //sugestoes pre prontas
@@ -223,9 +286,8 @@ private static void handleTokenMgrError(TokenMgrError e) {
 }
 
 
-
-  public static int one_line() throws ParseException {
-      try {
+public static int one_line() throws ParseException {
+    try {
         if (!parserInitialized) {
             new BrCompiler(System.in);
             parserInitialized = true;
@@ -235,79 +297,68 @@ private static void handleTokenMgrError(TokenMgrError e) {
         
         BrCompiler.main();
         return 0;
-      } catch (ParseException e) {
-          throw e;
-      }
-  }
+    } catch (ParseException e) {
+        // verifica se o erro é devido a EOF (entrada incompleta)
+        if (e.currentToken != null && e.currentToken.kind == EOF) {
+            System.out.println("NOK.");
+            System.out.println("ERRO DE SINTAXE: Entrada incompleta");
+            System.out.println("Verifique se todos os blocos foram fechados com 'fecha-te-sesamo'");
+            return -1; // codigo especial pra entrada incompleta
+        }
+        throw e;
+    }
+}
 
   
-  public static void main(String args []) throws ParseException
-{
+ public static void main(String args[]) throws ParseException {
     if (!parserInitialized) {
         new BrCompiler(System.in);
         parserInitialized = true;
     }
- 
-    while (true)
-    {
+
+    BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+    
+    while (true) {
         System.out.println("na minha maquina funciona!");
         System.out.print("comece a digitar sua gambiarra:");
-        
-        try
-        {
-            switch (BrCompiler.one_line())
-            {
-                case 0 : 
-                System.out.println("OK.");
-                break;
-                case 1 : 
-                System.out.println("Goodbye.");
-                break;
-                default : 
+
+        try {
+            String line = reader.readLine();
+            
+            // trata EOF (Ctrl+Z) corretamente
+            if (line == null) {
+                System.out.println("\nSaindo...");
                 break;
             }
-        }
-        catch (ParseException e)
-        {
+            
+            line = line.trim();
+            
+            if (line.isEmpty()) {
+                continue; // so continua se a linha estiver vazia
+            }
+            
+            
+            
+            BrCompiler.ReInit(new StringReader(line));
+            BrCompiler.main();
+            System.out.println("OK.");
+            
+        } catch (ParseException e) {
             handleParseError(e);
-            //limpeza do buffer:  (necessaria pois alguns tokens de erro estavam sendo concatenados apos muitas interacoes no console)
-            try {
-                while (System.in.available() > 0) {
-                    System.in.read(); // limpa caracteres restantes
-                }
-            } catch (Exception ex) {
-                // ignora erros de limpeza
-            }
-            BrCompiler.ReInit(System.in);
-        }
-        catch (TokenMgrError e)
-        {
-          	handleTokenMgrError(e);
-        
-            //  limpeza é feita aqui tb:
-            try {
-                while (System.in.available() > 0) {
-                    System.in.read();
-                }
-            } catch (Exception ex) {
-                // ignora
-            }
-            BrCompiler.ReInit(System.in);
-        }
-        catch (Exception e)
-        {
+        } catch (TokenMgrError e) {
+            handleTokenMgrError(e);
+        } catch (Exception e) {
             System.out.println("NOK.");
             System.out.println("ERRO INESPERADO: " + e.getMessage());
-            BrCompiler.ReInit(System.in);
-        }
-        catch (Error e)
-        {
-            System.out.println("Oops.");
-            System.out.println("ERRO FATAL: " + e.getMessage());
-            break;
+            
+            // Se for erro de stream fechada (EOF), sai do programa
+            if (e.toString().contains("Stream closed") || e.toString().contains("null")) {
+                System.out.println("Saindo...");
+                break;
+            }
         }
     }
-}//main
+}
 
 } //compilador
 
@@ -320,6 +371,7 @@ SKIP :
 | "\r"
 | "\t"
 | "\n"
+
 }
 
 TOKEN : /*funcoes e estru. dados */
