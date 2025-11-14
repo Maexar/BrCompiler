@@ -1,5 +1,6 @@
 /**
  * JavaCC template file created by SF JavaCC plugin 1.5.28+ wizard for JavaCC 1.5.0+
+ * GRAMÁTICA REFATORADA PARA LL(1) - Eliminação de LOOKAHEADs e Ambiguidades
  */
 options
 {
@@ -92,7 +93,6 @@ private static int verificarBlocos(String input) {
     }
     return nivel; // 0 = balanceado, >0 = blocos não fechados
 }
-
 
 // metodo pra tratar erros e gerar mensagens de erro em portugues
 public static void handleParseError(ParseException e) {
@@ -285,7 +285,6 @@ private static void handleTokenMgrError(TokenMgrError e) {
     
 }
 
-
 public static int one_line() throws ParseException {
     try {
         if (!parserInitialized) {
@@ -374,74 +373,79 @@ SKIP :
 
 }
 
-TOKEN : /*funcoes e estru. dados */
+TOKEN : /*funcoes */
 {
   <PRINT: "printa" >			|
   <SCAN: "papa-entrada" >		|
-  <FOR: "pet" >					|
-  <WHILE: "repet" >				|	
-  <SEPARADOR: ";" >				|
+  <FOR: "pet" >				|
+  <WHILE: "repet" >			|	
+  <SEPARADOR: ";" >			|
   <FUNCAO: "vai-filhao" >		|
   <RETURN: "devolva">			|
-  <VIRGULA: ",">				
+  <VIRGULA: ",">			
   
 }
 
 TOKEN : /*estrururas de dados*/
 {
-  <LISTA: "tropa-do-gordao" >		| //"membros da tropa" / informa o tamanho da lista. precisa ser complementado com um print
+  <LISTA: "tropa-do-gordao" >		| 
   <ADICIONAR: "recrutar" >  		|
-  <REMOVER: "expulsar" >  			|  
-  <TAMANHO: "tamanho" >				| 
+  <REMOVER: "expulsar" >  		|  
+  <TAMANHO: "tamanho" >			| //\"membros da tropa\" / informa o tamanho da lista. precisa ser complementado com um print
   <PILHA: "sanduiche-iche" >    	|
   <EMPILHAR: "montar-sanduba">		|
   <DESEMPILHAR: "comer-sanduba">  	|
-  <TOPO: "olho-gordo">				|
+  <TOPO: "olho-gordo">			|
   <PILHA_VAZIA: "farelo">
 }
 
 TOKEN : /*estruturas*/
 {
-  <INICIOPROG: "gambiarra">															|
-  <ABREBLOCO: "abre-te-sesamo">														|	
-  <FECHABLOCO: "fecha-te-sesamo">													|
-  <INT: "stonks">																	|
-  <FLOAT: "fiado">																	|
-  <STRING: "textao">																|
-  <BOOL: "eh-migue">																|
-  <TRUE: "sim">																		|
-  <FALSE: "nao">																	|
-  <ATRIBUICAO: "receba">															|
-  <FIMESTRUTURA: "br">																|
-  <CONDICIONAL: "sepa">																|
-  <SENAO: "da-teus-pulo">															|
-  <ABRIREXP: "[">																	|
-  <FECHAREXP: "]">																	|
-  <ABRIRFUNC: "(">																	|
-  <FECHARFUNC: ")">																	|
-  <LITERAL_STRING:"\"" (~["\""])* "\"">												|
-  <CONSTANTE_INT: (<DIGITO>)+>														|
-  <CONSTANTE_FLOAT: (<DIGITO>)+ "." (<DIGITO>)+>									|
+  <INICIOPROG: "gambiarra">						|
+  <ABREBLOCO: "abre-te-sesamo">					|	
+  <FECHABLOCO: "fecha-te-sesamo">				|
+  <INT: "stonks">								|
+  <FLOAT: "fiado">								|
+  <STRING: "textao">							|
+  <BOOL: "eh-migue">							|
+  <TRUE: "sim">									|
+  <FALSE: "nao">								|
+  <ATRIBUICAO: "receba">						|
+  <FIMESTRUTURA: "br">							|
+  <CONDICIONAL: "sepa">							|
+  <SENAO: "da-teus-pulo">						|
+  <ABRIREXP: "[">								|
+  <FECHAREXP: "]">								|
+  <ABRIRFUNC: "(">								|
+  <FECHARFUNC: ")">								|
+  <LITERAL_STRING:"\"" (~["\""])* "\"">			|
+  <CONSTANTE_INT: (<DIGITO>)+>					|
+  <CONSTANTE_FLOAT: (<DIGITO>)+ "." (<DIGITO>)+>	|
   <IDENTIFICADOR: ["a"-"z", "A"-"Z"] (["a"-"z", "A"-"Z"] | "-" | "_"| <DIGITO>)*>	|
   <#DIGITO : [ "0"-"9" ]> 
 }
 
 TOKEN: /*operacoes*/
 {
- <SOMA : "+">											|	
- <SUBTRACAO : "-">										|
- <MULTIPLICACAO : "*">									|
- <DIVISAO : "/">										|
- <OPMAIOR: ">">											|
- <OPIGUAL: "==">										|
- <OPMENOR: "<">											|
- <OPDIF: "!=">											|
- <OPMAIORIGUAL: " >=" >									|
- <OPMENORIGUAL: "<=" >									|
- <OPAND: "&&" >											|
- <OPOR: "|" >								
+ <SOMA : "+">							|	
+ <SUBTRACAO : "-">						|
+ <MULTIPLICACAO : "*">					|
+ <DIVISAO : "/">						|
+ <OPMAIOR: ">">							|
+ <OPIGUAL: "==">						|
+ <OPMENOR: "<">							|
+ <OPDIF: "!=">							|
+ <OPMAIORIGUAL: " >=" >					|
+ <OPMENORIGUAL: "<=" >					|
+ <OPAND: "&&" >							|
+ <OPOR: "|" >							
 }
 
+
+/* =====================================================
+   REGRAS GRAMATICAIS REFATORADAS PARA LL(1)
+   Eliminação de LOOKAHEADs através de Fatoração
+   ===================================================== */
 
 void main() :
 {}
@@ -455,23 +459,50 @@ void bloco():
  	(comando() | declaraFuncao())*
 }
 
+/* ========== COMANDO REFATORADO (SEM LOOKAHEADs) ========== */
 void comando():
 { }
 {
-   declaraVariavel() 					|
-   expressaoCondicional()             	|
-   LOOKAHEAD(3) comandoFuncao()         |
-   LOOKAHEAD(3) operacaoLista()         |
-   LOOKAHEAD(3) operacaoPilha()			|
-   LOOKAHEAD(2) atribuicao()			|   //resolve conflito de indecibilidade entre atribuicao e expressao
-   Expressao() <FIMESTRUTURA>	 		|
-   print()								|
-   scan()								|
-   whileLoop()							|
-   forLoop()							|
+   declaraVariavel() 			|
+   expressaoCondicional()       |
+   comandoIdentificador()       |
+   print()					|
+   scan()					|
+   whileLoop()				|
+   forLoop()				|
    retorno()
-    
 }
+
+/* ===== NOVO: FATORAÇÃO PARA COMANDOS COM IDENTIFICADOR ===== */
+/*
+ * Esta produção resolve a ambiguidade eliminando os LOOKAHEADs
+ * ao fatora todos os comandos que começam com IDENTIFICADOR
+ */
+void comandoIdentificador():
+{}
+{
+  <IDENTIFICADOR> comandoIdentificadorSufixo()
+}
+
+void comandoIdentificadorSufixo():
+{}
+{
+  <ATRIBUICAO> Expressao() <FIMESTRUTURA>                                    |
+  <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC> <FIMESTRUTURA>               |
+  <ADICIONAR> Expressao() <FIMESTRUTURA>                                     |
+  <REMOVER> <ABRIREXP> Expressao() <FECHAREXP> <FIMESTRUTURA>                |
+  <EMPILHAR> Expressao() <FIMESTRUTURA>                                      |
+  <DESEMPILHAR> <FIMESTRUTURA>                                               |
+  (<ABRIREXP> (ListaExpressoes())? <FECHAREXP>)? sufixoExpressao()
+}
+
+void sufixoExpressao():
+{}
+{
+  ((<SOMA> | <SUBTRACAO>) fator())* <FIMESTRUTURA>
+}
+
+/* ===================================================== */
 
 void declaraVariavel():
 { }
@@ -491,13 +522,7 @@ void tipoDado():
 
 }
 
-void atribuicao():
-{ }
-{
-  <IDENTIFICADOR> <ATRIBUICAO> Expressao() <FIMESTRUTURA>
-}
-
-void ListaIdentificadores(): //permite varias declaracoes de variaveis
+void ListaIdentificadores():
 { }
 {
   <IDENTIFICADOR> (<VIRGULA> <IDENTIFICADOR>)*
@@ -512,7 +537,6 @@ void ListaExpressoes():
   )*
 }
 
-
 void Expressao():
 { }
 {
@@ -523,7 +547,7 @@ void Expressao():
   )*
 }
 
-void fator(): { } //fazer respeitar hierarquia de operacoes
+void fator(): { }
 {
    termo()
   (
@@ -532,22 +556,35 @@ void fator(): { } //fazer respeitar hierarquia de operacoes
   )*
 }
 
+/* ========== TERMO REFATORADO (SEM LOOKAHEAD) ========== */
 void termo(): 
 {}
 {
-  LOOKAHEAD( <IDENTIFICADOR> <ABRIRFUNC> ) chamadaFuncao()						|
-  <IDENTIFICADOR> (<ABRIREXP> (ListaExpressoes())? <FECHAREXP>)?				| 
-  <CONSTANTE_INT>																|
-  <CONSTANTE_FLOAT>																|
-  <LITERAL_STRING>																|
-  <TRUE>																		|
-  <FALSE>																		|
-  <TAMANHO> <IDENTIFICADOR>                                      				|  
-  inicializacaoLista()                                            				|
-  <TOPO> <IDENTIFICADOR>														|
-  <PILHA_VAZIA> <IDENTIFICADOR>													|
-  "(" Expressao() ")" 			//reconhecer prioridade de parentese
-}									   
+  <IDENTIFICADOR> termoIdentificadorSufixo()                    |
+  <CONSTANTE_INT>                                               |
+  <CONSTANTE_FLOAT>                                             |
+  <LITERAL_STRING>                                              |
+  <TRUE>                                                        |
+  <FALSE>                                                       |
+  <TAMANHO> <IDENTIFICADOR>                                     |  
+  inicializacaoLista()                                          |
+  <TOPO> <IDENTIFICADOR>                                        |
+  <PILHA_VAZIA> <IDENTIFICADOR>                                 |
+  "(" Expressao() ")"
+}
+
+/*
+ * Esta produção resolve a ambiguidade entre chamada de função
+ * e acesso a variável/array ao utilizar 1 token lookahead
+ */
+void termoIdentificadorSufixo():
+{}
+{
+  <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC>               |
+  (<ABRIREXP> (ListaExpressoes())? <FECHAREXP>)?
+}
+
+/* ===================================================== */
 
 void operadorLogico():
 { }
@@ -565,9 +602,9 @@ void expressaoCondicional():
 {}
 {
   condicao() (<SENAO> (
-    					condicao() |
-  						<ABREBLOCO> bloco() <FECHABLOCO>)
-  					  )?
+    	condicao() |
+  	<ABREBLOCO> bloco() <FECHABLOCO>)
+  	)?
 }
 
 void condicao():
@@ -592,17 +629,16 @@ void whileLoop():
 {}
 {
   	<WHILE> <ABRIREXP > expressaoLogica() <FECHAREXP>
-  			 <ABREBLOCO> bloco() <FECHABLOCO>
+  		 <ABREBLOCO> bloco() <FECHABLOCO>
 }
 
 void forLoop():
 {}
 {
   <FOR> <ABRIREXP>
-  			atribuicaoFor() <SEPARADOR>
-  			expressaoLogica() <SEPARADOR>
-  			atribuicaoFor()
-
+  		atribuicaoFor() <SEPARADOR>
+  		expressaoLogica() <SEPARADOR>
+  		atribuicaoFor()
   		 <FECHAREXP>
   		 <ABREBLOCO>
 			bloco()
@@ -615,14 +651,11 @@ void atribuicaoFor():
   (tipoDado())? <IDENTIFICADOR> <ATRIBUICAO> Expressao()
 }
 
-//tratar escopo na analise semantica
-void declaraFuncao():  //tipoDado é opcional para permitir funções sem retorno, sem precisar adicionar o tipo void
+void declaraFuncao():
 {}
 {
  <FUNCAO> (tipoDado())? <IDENTIFICADOR> <ABRIRFUNC> (listaParametros())? <FECHARFUNC>
- 						  <ABREBLOCO> bloco() <FECHABLOCO>
-
-//ex: funcao int numeroPrimo [int a, int b ] { comandos }
+ 	<ABREBLOCO> bloco() <FECHABLOCO>
 }
 
 void listaParametros():
@@ -643,39 +676,16 @@ void retorno():
 	<RETURN> (Expressao())?<FIMESTRUTURA>
 }
 
-void chamadaFuncao(): //usa em expressoes, que exigem que a funcao retorne tipo
-{}
-{
-  <IDENTIFICADOR> <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC>
-  // ex: somar(5, 10), usada em expressões
-}
-
-// é para chamar funções void criadas pelo usuário. Usada em comandos independentes. Não dá pra usar em expressões
-void comandoFuncao():
-{}
-{
-  
-  <IDENTIFICADOR> <ABRIRFUNC> (ListaExpressoes())? <FECHARFUNC> <FIMESTRUTURA>
-  // ex: imprime("oi");  função void como comando
-}
-
 void tipoLista():
 { }
 {
-  <LISTA> (<INT> | <FLOAT> | <STRING> | <BOOL>) //nao chamei tipoDado pra nao criar recursao infinita de lista int lista int lista int lista 
+  <LISTA> (<INT> | <FLOAT> | <STRING> | <BOOL>)
 }
 
 void inicializacaoLista():
 {}
 {
-  <ABRIREXP> (ListaExpressoes())? <FECHAREXP> // ex: [1, 2, 3]
-}
-
-void operacaoLista():
-{}
-{
-  LOOKAHEAD(2) <IDENTIFICADOR> <ADICIONAR> Expressao() <FIMESTRUTURA> 			|
-  <IDENTIFICADOR> <REMOVER> <ABRIREXP> Expressao() <FECHAREXP> <FIMESTRUTURA>
+  <ABRIREXP> (ListaExpressoes())? <FECHAREXP>
 }
 
 void tipoPilha():
@@ -683,11 +693,3 @@ void tipoPilha():
 {
   <PILHA> (<INT> | <FLOAT> | <STRING> | <BOOL>)
 }
-
-void operacaoPilha():
-{}
-{
-  LOOKAHEAD(2) <IDENTIFICADOR> <EMPILHAR> Expressao() <FIMESTRUTURA>     |  
-  <IDENTIFICADOR> <DESEMPILHAR> <FIMESTRUTURA>								//desempilhar precisa da parte semantica
-}
-
