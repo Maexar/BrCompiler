@@ -113,8 +113,30 @@ public class CompilerRestServer {
         } catch (ParseException e) {
             System.out.println("[DEBUG] ParseException capturada");
             String errorMsg = BrCompiler.handleParseError(e);
-            int line = e.currentToken != null ? e.currentToken.beginLine : 0;
-            int column = e.currentToken != null ? e.currentToken.beginColumn : 0;
+            
+            // Extrai posicao do marcador [POSICAO]linha,coluna[/POSICAO]
+            int line = 0;
+            int column = 0;
+            int posicaoStart = errorMsg.indexOf("[POSICAO]");
+            int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
+            
+            if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
+                try {
+                    String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
+                    String[] partes = posicaoStr.split(",");
+                    if (partes.length == 2) {
+                        line = Integer.parseInt(partes[0].trim());
+                        column = Integer.parseInt(partes[1].trim());
+                    }
+                    // Remove os marcadores da mensagem de erro
+                    errorMsg = errorMsg.substring(0, posicaoStart) + 
+                               (posicaoEnd + 12 < errorMsg.length() ? 
+                                errorMsg.substring(posicaoEnd + 12) : "");
+                    errorMsg = errorMsg.trim();
+                } catch (Exception ex) {
+                    System.out.println("[AVISO] Erro ao extrair posição: " + ex.getMessage());
+                }
+            }
             
             return "{\"success\":false,\"error\":\"" + 
                    escapeJson(errorMsg) + "\",\"line\":" + line + ",\"column\":" + column + "}";
@@ -123,8 +145,32 @@ public class CompilerRestServer {
             System.out.println("[DEBUG] TokenMgrError capturado");
             String errorMsg = BrCompiler.handleTokenMgrError(e);
             
+            // Extrai posicao do marcador [POSICAO]linha,coluna[/POSICAO]
+            int line = 0;
+            int column = 0;
+            int posicaoStart = errorMsg.indexOf("[POSICAO]");
+            int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
+            
+            if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
+                try {
+                    String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
+                    String[] partes = posicaoStr.split(",");
+                    if (partes.length == 2) {
+                        line = Integer.parseInt(partes[0].trim());
+                        column = Integer.parseInt(partes[1].trim());
+                    }
+                    // Remove os marcadores da mensagem de erro
+                    errorMsg = errorMsg.substring(0, posicaoStart) + 
+                               (posicaoEnd + 12 < errorMsg.length() ? 
+                                errorMsg.substring(posicaoEnd + 12) : "");
+                    errorMsg = errorMsg.trim();
+                } catch (Exception ex) {
+                    System.out.println("[AVISO] Erro ao extrair posição: " + ex.getMessage());
+                }
+            }
+            
             return "{\"success\":false,\"error\":\"" + 
-                   escapeJson(errorMsg) + "\"}";
+                   escapeJson(errorMsg) + "\",\"line\":" + line + ",\"column\":" + column + "}";
             
         } catch (Exception e) {
             System.out.println("[DEBUG] Exception genérica capturada");

@@ -90,16 +90,15 @@ public class BrCompiler implements BrCompilerConstants {
 
     if (blocoNaoFechado) {
         resultado.append("ERRO DE SINTAXE: Bloco nao fechado\n");
-        resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando");
+        resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando\n");
 
         if (e.currentToken != null) {
-            resultado.append("\nErro detectado proximo a linha ").append(e.currentToken.beginLine)
-                    .append(", coluna ").append(e.currentToken.beginColumn);
+            resultado.append("[POSICAO]").append(e.currentToken.beginLine).append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
         }
         return resultado.toString();
     }
 
-    resultado.append("ERRO DE SINTAXE:\n");
+    resultado.append("ERRO DE SINTAXE: ");
 
     // Usa o proximo token (que deveria ter vindo) para mostrar onde eh a posicao do erro
     Token tokenComErro = null;
@@ -110,8 +109,7 @@ public class BrCompiler implements BrCompilerConstants {
     }
 
     if (tokenComErro != null && tokenComErro.image != null) {
-        resultado.append("Token encontrado: '").append(tokenComErro.image).append("' na linha ")
-                .append(tokenComErro.beginLine).append(", coluna ").append(tokenComErro.beginColumn);
+        resultado.append("Token encontrado: '").append(tokenComErro.image).append("'");
     } else {
         resultado.append("Token encontrado: fim de arquivo inesperado");
     }
@@ -127,6 +125,11 @@ public class BrCompiler implements BrCompilerConstants {
             }
             first = false;
         }
+    }
+
+    // Adiciona posicao no final com marcadores para facilitar parsing
+    if (tokenComErro != null) {
+        resultado.append("\n[POSICAO]").append(tokenComErro.beginLine).append(",").append(tokenComErro.beginColumn).append("[/POSICAO]");
     }
 
     return resultado.toString();
@@ -193,11 +196,13 @@ public class BrCompiler implements BrCompilerConstants {
     }
 
     resultado.append("ERRO LEXICO\n");
-    resultado.append("Caractere invalido '").append(charEncontrado).append("' encontrado na linha ")
-            .append(linha).append(", coluna ").append(coluna);
+    resultado.append("Caractere invalido '").append(charEncontrado).append("' encontrado");
 
     String sugestao = gerarSugestaoErroLexico(charEncontrado);
     resultado.append("\n").append(sugestao);
+
+    // Adiciona posicao no final com marcadores
+    resultado.append("\n[POSICAO]").append(linha).append(",").append(coluna).append("[/POSICAO]");
 
     return resultado.toString();
   }
