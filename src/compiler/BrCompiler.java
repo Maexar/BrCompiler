@@ -7,8 +7,8 @@ import java.io.InputStreamReader;
 import java.io.StringReader;
 
 public class BrCompiler implements BrCompilerConstants {
-
   private static boolean parserInitialized = false;
+
 
   private static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
@@ -66,41 +66,40 @@ public class BrCompiler implements BrCompilerConstants {
     }
   }
 
-  public static String handleParseError(ParseException e) {
+public static String handleParseError(ParseException e) {
     StringBuilder resultado = new StringBuilder();
-    boolean blocoNaoFechado = false;
 
-    if (e.currentToken != null) {
-        if (e.currentToken.kind == EOF) {
-            blocoNaoFechado = true;
-        } else if (e.currentToken.next != null && e.currentToken.next.kind == EOF) {
-            blocoNaoFechado = true;
-        } else if (e.expectedTokenSequences != null) {
-            for (int[] sequence : e.expectedTokenSequences) {
-                for (int tokenType : sequence) {
-                    if (tokenType == FECHABLOCO) {
-                        blocoNaoFechado = true;
-                        break;
-                    }
+    // Detecta bloco não fechado: FECHABLOCO está entre as opções esperadas
+    if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
+        boolean temFechabloco = false;
+
+        // Procura FECHABLOCO em QUALQUER sequência esperada
+        for (int[] sequence : e.expectedTokenSequences) {
+            for (int tokenType : sequence) {
+                if (tokenType == FECHABLOCO) {
+                    temFechabloco = true;
+                    break;
                 }
-                if (blocoNaoFechado) break;
             }
+            if (temFechabloco) break;
+        }
+
+        // Se FECHABLOCO está entre as opções, é bloco não fechado
+        if (temFechabloco) {
+            resultado.append("ERRO DE SINTAXE: Bloco nao fechado\n");
+            resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando\n");
+
+            if (e.currentToken != null) {
+                resultado.append("[POSICAO]").append(e.currentToken.beginLine).append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
+            }
+            return resultado.toString();
         }
     }
 
-    if (blocoNaoFechado) {
-        resultado.append("ERRO DE SINTAXE: Bloco nao fechado\n");
-        resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando\n");
-
-        if (e.currentToken != null) {
-            resultado.append("[POSICAO]").append(e.currentToken.beginLine).append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
-        }
-        return resultado.toString();
-    }
+    // ===== RESTO DO CÓDIGO (SÓ EXECUTA SE NÃO FOR BLOCO NÃO FECHADO) =====
 
     resultado.append("ERRO DE SINTAXE: ");
 
-    // Usa o proximo token (que deveria ter vindo) para mostrar onde eh a posicao do erro
     Token tokenComErro = null;
     if (e.currentToken != null && e.currentToken.next != null) {
         tokenComErro = e.currentToken.next;
@@ -108,7 +107,7 @@ public class BrCompiler implements BrCompilerConstants {
         tokenComErro = e.currentToken;
     }
 
-    if (tokenComErro != null && tokenComErro.image != null) {
+    if (tokenComErro != null && tokenComErro.image != null && !tokenComErro.image.isEmpty()) {
         resultado.append("Token encontrado: '").append(tokenComErro.image).append("'");
     } else {
         resultado.append("Token encontrado: fim de arquivo inesperado");
@@ -127,13 +126,12 @@ public class BrCompiler implements BrCompilerConstants {
         }
     }
 
-    // Adiciona posicao no final com marcadores para facilitar parsing
     if (tokenComErro != null) {
         resultado.append("\n[POSICAO]").append(tokenComErro.beginLine).append(",").append(tokenComErro.beginColumn).append("[/POSICAO]");
     }
 
     return resultado.toString();
-  }
+}
 
   public static String handleTokenMgrError(TokenMgrError e) {
     String msg = e.getMessage();
@@ -201,7 +199,6 @@ public class BrCompiler implements BrCompilerConstants {
     String sugestao = gerarSugestaoErroLexico(charEncontrado);
     resultado.append("\n").append(sugestao);
 
-    // Adiciona posicao no final com marcadores
     resultado.append("\n[POSICAO]").append(linha).append(",").append(coluna).append("[/POSICAO]");
 
     return resultado.toString();
