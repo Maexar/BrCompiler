@@ -101,10 +101,17 @@ public class BrCompiler implements BrCompilerConstants {
 
     resultado.append("ERRO DE SINTAXE:\n");
 
-    // Usa apenas currentToken para uma unica posicao correta
-    if (e.currentToken != null && e.currentToken.image != null) {
-        resultado.append("Token encontrado: '").append(e.currentToken.image).append("' na linha ")
-                .append(e.currentToken.beginLine).append(", coluna ").append(e.currentToken.beginColumn);
+    // Usa o proximo token (que deveria ter vindo) para mostrar onde eh a posicao do erro
+    Token tokenComErro = null;
+    if (e.currentToken != null && e.currentToken.next != null) {
+        tokenComErro = e.currentToken.next;
+    } else if (e.currentToken != null) {
+        tokenComErro = e.currentToken;
+    }
+
+    if (tokenComErro != null && tokenComErro.image != null) {
+        resultado.append("Token encontrado: '").append(tokenComErro.image).append("' na linha ")
+                .append(tokenComErro.beginLine).append(", coluna ").append(tokenComErro.beginColumn);
     } else {
         resultado.append("Token encontrado: fim de arquivo inesperado");
     }
