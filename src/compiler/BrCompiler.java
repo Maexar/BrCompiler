@@ -10,7 +10,6 @@ public class BrCompiler implements BrCompilerConstants {
 
   private static boolean parserInitialized = false;
 
-  // mapeamento de tokens 
   private static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
       case INICIOPROG: return "gambiarra";
@@ -67,40 +66,16 @@ public class BrCompiler implements BrCompilerConstants {
     }
   }
 
-//conta cada delimitador de bloco aberto
-private static int verificarBlocos(String input) {
-    int nivel = 0;
-    String[] tokens = input.split("\\s+");
-
-    for (String token : tokens) {
-        if (token.equals("abre-te-sesamo")) {
-            nivel++;
-        } else if (token.equals("fecha-te-sesamo")) {
-            nivel--;
-            if (nivel < 0) {
-                return -1; // erro: fechamento sem abertura
-            }
-        }
-    }
-    return nivel; // 0 = balanceado, >0 = blocos não fechados
-}
-
-// metodo pra tratar erros e gerar mensagens de erro em portugues
-public static void handleParseError(ParseException e) {
-    // Detecção melhorada para bloco não fechado
+  public static String handleParseError(ParseException e) {
+    StringBuilder resultado = new StringBuilder();
     boolean blocoNaoFechado = false;
 
     if (e.currentToken != null) {
-        // Caso 1: Token atual é EOF - chegamos ao fim sem fechar o bloco
         if (e.currentToken.kind == EOF) {
             blocoNaoFechado = true;
-        }
-        // Caso 2: Próximo token é EOF - estamos no último token antes do fim
-        else if (e.currentToken.next != null && e.currentToken.next.kind == EOF) {
+        } else if (e.currentToken.next != null && e.currentToken.next.kind == EOF) {
             blocoNaoFechado = true;
-        }
-        // Caso 3: Verifica se estava esperando FECHABLOCO mas não encontrou
-        else if (e.expectedTokenSequences != null) {
+        } else if (e.expectedTokenSequences != null) {
             for (int[] sequence : e.expectedTokenSequences) {
                 for (int tokenType : sequence) {
                     if (tokenType == FECHABLOCO) {
@@ -114,26 +89,21 @@ public static void handleParseError(ParseException e) {
     }
 
     if (blocoNaoFechado) {
-        System.out.println("NOK.");
-        System.out.println("ERRO DE SINTAXE: Bloco n\u00e3o fechado");
-        System.out.println("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando");
+        resultado.append("ERRO DE SINTAXE: Bloco nao fechado\n");
+        resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando");
 
-        // Tenta dar uma posição mais específica
         if (e.currentToken != null) {
-            System.out.println("Erro detectado pr\u00f3ximo \u00e0 linha " + e.currentToken.beginLine +
-                             ", coluna " + e.currentToken.beginColumn);
+            resultado.append("\nErro detectado proximo a linha ").append(e.currentToken.beginLine)
+                    .append(", coluna ").append(e.currentToken.beginColumn);
         }
-        return;
+        return resultado.toString();
     }
 
-    // Resto do método para outros tipos de erro
-    System.out.println("NOK.");
-    System.out.println("ERRO DE SINTAXE:");
+    resultado.append("ERRO DE SINTAXE:\n");
 
     Token currentToken = e.currentToken;
     Token tokenEncontrado = null;
 
-    // tenta obter as info do token encontrado
     if (currentToken != null && currentToken.next != null) {
         tokenEncontrado = currentToken.next;
     } else if (currentToken != null) {
@@ -146,49 +116,46 @@ public static void handleParseError(ParseException e) {
         }
     }
 
-    // aqui mostra informacoes do token que encontrou
     if (tokenEncontrado != null && tokenEncontrado.image != null) {
-        System.out.println("Token encontrado: '" + tokenEncontrado.image + "' na linha " +
-                         tokenEncontrado.beginLine + ", coluna " + tokenEncontrado.beginColumn);
+        resultado.append("Token encontrado: '").append(tokenEncontrado.image).append("' na linha ")
+                .append(tokenEncontrado.beginLine).append(", coluna ").append(tokenEncontrado.beginColumn);
     } else {
         if (currentToken != null) {
             String tokenImage = currentToken.image != null ? currentToken.image : "EOF";
             int linha = currentToken.beginLine > 0 ? currentToken.beginLine : 1;
             int coluna = currentToken.beginColumn > 0 ? currentToken.beginColumn : 1;
-            System.out.println("Token encontrado: '" + tokenImage + "' na linha " + linha + ", coluna " + coluna);
+            resultado.append("Token encontrado: '").append(tokenImage).append("' na linha ")
+                    .append(linha).append(", coluna ").append(coluna);
         } else {
-            System.out.println("Token encontrado: fim de arquivo inesperado");
+            resultado.append("Token encontrado: fim de arquivo inesperado");
         }
     }
 
-    // aqui mostra os tokens esperados
     if (e.expectedTokenSequences.length > 0) {
-        System.out.print("Era esperado: ");
+        resultado.append("\nEra esperado: ");
         boolean first = true;
         for (int[] sequence : e.expectedTokenSequences) {
-            if (!first) System.out.print(" ou ");
+            if (!first) resultado.append(" ou ");
             for (int i = 0; i < sequence.length; i++) {
-                if (i > 0) System.out.print(" ");
-                System.out.print("'" + obterTokenPortugues(sequence[i]) + "'");
+                if (i > 0) resultado.append(" ");
+                resultado.append("'").append(obterTokenPortugues(sequence[i])).append("'");
             }
             first = false;
         }
-        System.out.println();
     }
-}
 
-//metodo pra tratar os erros léxicos em pt br
+    return resultado.toString();
+  }
 
-private static void handleTokenMgrError(TokenMgrError e) {
+  public static String handleTokenMgrError(TokenMgrError e) {
     String msg = e.getMessage();
+    StringBuilder resultado = new StringBuilder();
 
     int linha = 1;
     int coluna = 1;
     String charEncontrado = "?";
-    boolean problemaNoEspaco = false;
 
     try {
-        // extrair linha e coluna
         String[] partes = msg.split(" ");
         for (int i = 0; i < partes.length; i++) {
             if (partes[i].equals("line") && i + 1 < partes.length) {
@@ -199,19 +166,15 @@ private static void handleTokenMgrError(TokenMgrError e) {
             }
         }
 
-
         if (msg.contains("after prefix")) {
-
             int start = msg.indexOf("after prefix \"") + 14;
             int end = msg.indexOf("\"", start);
             if (start > 13 && end > start) {
                 String prefixo = msg.substring(start, end);
                 charEncontrado = prefixo;
-
                 coluna = Math.max(1, coluna - prefixo.length());
             }
         } else if (msg.contains("Encountered:") && msg.contains("(")) {
-
             int parenteseAbre = msg.lastIndexOf("(");
             int parenteseFecha = msg.indexOf(")", parenteseAbre);
 
@@ -222,11 +185,6 @@ private static void handleTokenMgrError(TokenMgrError e) {
                     try {
                         int codigoAscii = Integer.parseInt(codigoStr);
                         charEncontrado = Character.toString((char) codigoAscii);
-
-
-                        if (codigoAscii == 32 && !msg.contains("after prefix")) {
-                            problemaNoEspaco = true;
-                        }
                     } catch (NumberFormatException ex) {
                         charEncontrado = codigoStr;
                     }
@@ -235,16 +193,12 @@ private static void handleTokenMgrError(TokenMgrError e) {
                 }
             }
         } else {
-
             int aspasAbre = msg.indexOf("'");
             int aspasFecha = msg.indexOf("'", aspasAbre + 1);
             if (aspasAbre != -1 && aspasFecha != -1) {
                 charEncontrado = msg.substring(aspasAbre + 1, aspasFecha);
             }
         }
-
-
-
     } catch (Exception ex) {
         // manter valores padrao
     }
@@ -253,54 +207,35 @@ private static void handleTokenMgrError(TokenMgrError e) {
         charEncontrado = charEncontrado.substring(1, charEncontrado.length() - 1);
     }
 
-    System.out.println("NOK.");
-    System.out.println("ERRO L\u00c9XICO");
-    System.out.println("Caractere inv\u00e1lido '" + charEncontrado + "' encontrado na linha " + linha + ", coluna " + coluna);
+    resultado.append("ERRO LEXICO\n");
+    resultado.append("Caractere invalido '").append(charEncontrado).append("' encontrado na linha ")
+            .append(linha).append(", coluna ").append(coluna);
 
-//sugestoes pre prontas
+    String sugestao = gerarSugestaoErroLexico(charEncontrado);
+    resultado.append("\n").append(sugestao);
+
+    return resultado.toString();
+  }
+
+  private static String gerarSugestaoErroLexico(String charEncontrado) {
     if (charEncontrado.equals("=")) {
-        System.out.println("Sugest\u00e3o: Use 'receba' para atribui\u00e7\u00e3o em vez de '='");
+        return "Sugestao: Use 'receba' para atribuicao em vez de '='";
     } else if (charEncontrado.equals("@")) {
-        System.out.println("Sugest\u00e3o: Caractere '@' n\u00e3o \u00e9 permitido. Use apenas caracteres v\u00e1lidos");
-    }  else if (charEncontrado.equals("?")) {
-        System.out.println("Sugest\u00e3o: Ponto de interroga\u00e7\u00e3o n\u00e3o \u00e9 um operador v\u00e1lido");
+        return "Sugestao: Caractere '@' nao e permitido";
+    } else if (charEncontrado.equals("?")) {
+        return "Sugestao: Ponto de interrogacao nao e um operador valido";
     } else if (charEncontrado.equals(":")) {
-        System.out.println("Sugest\u00e3o: Dois pontos n\u00e3o s\u00e3o usados na linguagem");
+        return "Sugestao: Dois pontos nao sao usados na linguagem";
     } else if (charEncontrado.equals("'")) {
-        System.out.println("Sugest\u00e3o: Utilize aspas duplas para strings");
+        return "Sugestao: Utilize aspas duplas para strings";
     } else if (charEncontrado.equals("!")) {
-        System.out.println("Sugest\u00e3o: Use '!=' para diferen\u00e7a, ou verifique a sintaxe");
+        return "Sugestao: Use '!=' para diferenca";
     } else {
-        System.out.println("Sugest\u00e3o: Use apenas letras, n\u00fameros e os operadores definidos na linguagem");
+        return "Sugestao: Use apenas letras, numeros e os operadores definidos";
     }
+  }
 
-}
-
-public static int one_line() throws ParseException {
-    try {
-        if (!parserInitialized) {
-            new BrCompiler(System.in);
-            parserInitialized = true;
-        } else {
-            BrCompiler.ReInit(System.in);
-        }
-
-        BrCompiler.main();
-        return 0;
-    } catch (ParseException e) {
-        // verifica se o erro é devido a EOF (entrada incompleta)
-        if (e.currentToken != null && e.currentToken.kind == EOF) {
-            System.out.println("NOK.");
-            System.out.println("ERRO DE SINTAXE: Entrada incompleta");
-            System.out.println("Verifique se todos os blocos foram fechados com 'fecha-te-sesamo'");
-            return -1; // codigo especial pra entrada incompleta
-        }
-        throw e;
-    }
-}
-
-
- public static void main(String args[]) throws ParseException {
+  public static void main(String args[]) throws ParseException {
     if (!parserInitialized) {
         new BrCompiler(System.in);
         parserInitialized = true;
@@ -315,7 +250,6 @@ public static int one_line() throws ParseException {
         try {
             String line = reader.readLine();
 
-            // trata EOF (Ctrl+Z) corretamente
             if (line == null) {
                 System.out.println("\nSaindo...");
                 break;
@@ -324,38 +258,32 @@ public static int one_line() throws ParseException {
             line = line.trim();
 
             if (line.isEmpty()) {
-                continue; // so continua se a linha estiver vazia
+                continue;
             }
-
-
 
             BrCompiler.ReInit(new StringReader(line));
             BrCompiler.main();
             System.out.println("OK.");
 
         } catch (ParseException e) {
-            handleParseError(e);
+            System.out.println("NOK.");
+            System.out.println(handleParseError(e));
         } catch (TokenMgrError e) {
-            handleTokenMgrError(e);
+            System.out.println("NOK.");
+            System.out.println(handleTokenMgrError(e));
         } catch (Exception e) {
             System.out.println("NOK.");
             System.out.println("ERRO INESPERADO: " + e.getMessage());
 
-            // Se for erro de stream fechada (EOF), sai do programa
             if (e.toString().contains("Stream closed") || e.toString().contains("null")) {
                 System.out.println("Saindo...");
                 break;
             }
         }
     }
-}
+  }
 
-/* =====================================================
-   REGRAS GRAMATICAIS REFATORADAS PARA LL(1)
-   Eliminação de LOOKAHEADs através de Fatoração
-   ===================================================== */
-  static final public 
-void main() throws ParseException {
+  static final public void main() throws ParseException {
     jj_consume_token(INICIOPROG);
     jj_consume_token(ABREBLOCO);
     bloco();
@@ -416,7 +344,6 @@ void main() throws ParseException {
     }
 }
 
-/* ========== COMANDO REFATORADO (SEM LOOKAHEADs) ========== */
   static final public void comando() throws ParseException {
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case LISTA:
@@ -463,11 +390,6 @@ void main() throws ParseException {
     }
 }
 
-/* ===== NOVO: FATORAÇÃO PARA COMANDOS COM IDENTIFICADOR ===== */
-/*
- * Esta produção resolve a ambiguidade eliminando os LOOKAHEADs
- * ao fatora todos os comandos que começam com IDENTIFICADOR
- */
   static final public void comandoIdentificador() throws ParseException {
     jj_consume_token(IDENTIFICADOR);
     comandoIdentificadorSufixo();
@@ -606,9 +528,7 @@ void main() throws ParseException {
     jj_consume_token(FIMESTRUTURA);
 }
 
-/* ===================================================== */
-  static final public 
-void declaraVariavel() throws ParseException {
+  static final public void declaraVariavel() throws ParseException {
     tipoDado();
     ListaIdentificadores();
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -757,7 +677,6 @@ void declaraVariavel() throws ParseException {
     }
 }
 
-/* ========== TERMO REFATORADO (SEM LOOKAHEAD) ========== */
   static final public void termo() throws ParseException {
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case IDENTIFICADOR:{
@@ -817,10 +736,6 @@ void declaraVariavel() throws ParseException {
     }
 }
 
-/*
- * Esta produção resolve a ambiguidade entre chamada de função
- * e acesso a variável/array ao utilizar 1 token lookahead
- */
   static final public void termoIdentificadorSufixo() throws ParseException {
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case ABRIRFUNC:{
@@ -881,9 +796,7 @@ void declaraVariavel() throws ParseException {
     }
 }
 
-/* ===================================================== */
-  static final public 
-void operadorLogico() throws ParseException {
+  static final public void operadorLogico() throws ParseException {
     switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
     case OPDIF:{
       jj_consume_token(OPDIF);
@@ -1399,5 +1312,4 @@ void operadorLogico() throws ParseException {
   static final public void disable_tracing() {
   }
 
-} //compilador
-
+}

@@ -111,23 +111,24 @@ public class CompilerRestServer {
                    countLines(code) + "}";
             
         } catch (ParseException e) {
-            String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro de sintaxe";
+            System.out.println("[DEBUG] ParseException capturada");
+            String errorMsg = BrCompiler.handleParseError(e);
             int line = e.currentToken != null ? e.currentToken.beginLine : 0;
             int column = e.currentToken != null ? e.currentToken.beginColumn : 0;
             
-            System.out.println("[DEBUG] ParseException: " + errorMsg);
             return "{\"success\":false,\"error\":\"" + 
                    escapeJson(errorMsg) + "\",\"line\":" + line + ",\"column\":" + column + "}";
             
         } catch (TokenMgrError e) {
-            String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro léxico";
-            System.out.println("[DEBUG] TokenMgrError: " + errorMsg);
-            return "{\"success\":false,\"error\":\"Erro léxico: " + 
+            System.out.println("[DEBUG] TokenMgrError capturado");
+            String errorMsg = BrCompiler.handleTokenMgrError(e);
+            
+            return "{\"success\":false,\"error\":\"" + 
                    escapeJson(errorMsg) + "\"}";
             
         } catch (Exception e) {
+            System.out.println("[DEBUG] Exception genérica capturada");
             String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro desconhecido";
-            System.out.println("[DEBUG] Exception genérica: " + errorMsg);
             e.printStackTrace();
             return "{\"success\":false,\"error\":\"" + 
                    escapeJson(errorMsg) + "\"}";
