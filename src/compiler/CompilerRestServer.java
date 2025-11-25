@@ -1,0 +1,163 @@
+package compiler;
+
+import com.sun.net.httpserver.*;
+import java.io.*;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+
+public class CompilerRestServer {
+    private static final int PORT = 8085;
+    private static BrCompiler compiler = null;
+    
+    public static void main(String[] args) throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("localhost", PORT), 0);
+        
+        server.createContext("/api/compile", exchange -> {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+                return;
+            }
+            
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String body = new String(exchange.getRequestBody().readAllBytes(), 
+                                            StandardCharsets.UTF_8);
+                    String code = extractCode(body);
+                    
+                    System.out.println("[DEBUG] Código recebido: " + code);
+                    
+                    String result = compileCode(code);
+                    
+                    System.out.println("[DEBUG] Resposta: " + result);
+                    
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                    exchange.sendResponseHeaders(200, result.getBytes().length);
+                    exchange.getResponseBody().write(result.getBytes());
+                    exchange.close();
+                } catch (Exception e) {
+                    System.out.println("[ERRO] Exceção: " + e.getMessage());
+                    e.printStackTrace();
+                    try {
+                        String response = "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}";
+                        exchange.getResponseHeaders().set("Content-Type", "application/json");
+                        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                        exchange.sendResponseHeaders(500, response.getBytes().length);
+                        exchange.getResponseBody().write(response.getBytes());
+                        exchange.close();
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                exchange.sendResponseHeaders(405, -1);
+                exchange.close();
+            }
+        });
+        
+        server.createContext("/api/health", exchange -> {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+                return;
+            }
+            
+            String response = "{\"status\":\"ok\",\"compiler\":\"BrCompiler\",\"version\":\"1.0\"}";
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            exchange.sendResponseHeaders(200, response.getBytes().length);
+            exchange.getResponseBody().write(response.getBytes());
+            exchange.close();
+        });
+        
+        server.setExecutor(null);
+        server.start();
+        
+        System.out.println("\n");
+        System.out.println("SERVIDOR COMPILADOR INICIADO");
+        System.out.println("\nEndpoints disponiveis:");
+        System.out.println("   POST http://localhost:" + PORT + "/api/compile");
+        System.out.println("   GET  http://localhost:" + PORT + "/api/health");
+        System.out.println("\nMANTENHA ESTE TERMINAL ABERTO ENQUANTO DESENVOLVE\n");
+    }
+    
+    private static String compileCode(String code) {
+        if (code == null || code.trim().isEmpty()) {
+            return "{\"success\":false,\"error\":\"Código vazio\"}";
+        }
+        
+        try {
+            System.out.println("[DEBUG] Tentando compilar código...");
+            
+            java.io.StringReader reader = new java.io.StringReader(code);
+            
+            if (compiler == null) {
+                System.out.println("[DEBUG] Primeira chamada - criando instância BrCompiler");
+                compiler = new BrCompiler(reader);
+            } else {
+                System.out.println("[DEBUG] ReInit do BrCompiler com novo código");
+                BrCompiler.ReInit(reader);
+            }
+            
+            compiler.main();
+            
+            System.out.println("[DEBUG] Compilação bem-sucedida!");
+            return "{\"success\":true,\"message\":\"Código compilado com sucesso\",\"lines\":" + 
+                   countLines(code) + "}";
+            
+        } catch (ParseException e) {
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro de sintaxe";
+            int line = e.currentToken != null ? e.currentToken.beginLine : 0;
+            int column = e.currentToken != null ? e.currentToken.beginColumn : 0;
+            
+            System.out.println("[DEBUG] ParseException: " + errorMsg);
+            return "{\"success\":false,\"error\":\"" + 
+                   escapeJson(errorMsg) + "\",\"line\":" + line + ",\"column\":" + column + "}";
+            
+        } catch (TokenMgrError e) {
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro léxico";
+            System.out.println("[DEBUG] TokenMgrError: " + errorMsg);
+            return "{\"success\":false,\"error\":\"Erro léxico: " + 
+                   escapeJson(errorMsg) + "\"}";
+            
+        } catch (Exception e) {
+            String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro desconhecido";
+            System.out.println("[DEBUG] Exception genérica: " + errorMsg);
+            e.printStackTrace();
+            return "{\"success\":false,\"error\":\"" + 
+                   escapeJson(errorMsg) + "\"}";
+        }
+    }
+    
+    private static int countLines(String code) {
+        if (code == null || code.isEmpty()) return 0;
+        return code.split("\n").length;
+    }
+    
+    private static String extractCode(String json) {
+        try {
+            int start = json.indexOf("\"code\":\"") + 8;
+            int end = json.lastIndexOf("\"");
+            if (start > 7 && end > start) {
+                String code = json.substring(start, end);
+                return code.replace("\\n", "\n").replace("\\t", "\t");
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao extrair código: " + e.getMessage());
+        }
+        return "";
+    }
+    
+    private static String escapeJson(String text) {
+        if (text == null) return "";
+        return text.replace("\"", "'")
+                   .replace("\n", " ")
+                   .replace("\r", " ")
+                   .replace("\t", " ");
+    }
+}

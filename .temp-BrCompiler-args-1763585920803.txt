@@ -1,0 +1,10 @@
+--module-path
+bin
+--module
+BrCompiler/compiler.BrCompiler
+-Dfile.encoding=UTF-8
+-Dstdout.encoding=UTF-8
+-Dstderr.encoding=UTF-8
+-XX:+ShowCodeDetailsInExceptionMessages
+-m
+BrCompiler/compiler.BrCompiler
