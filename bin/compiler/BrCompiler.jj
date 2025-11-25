@@ -110,34 +110,12 @@ public class BrCompiler
     
     resultado.append("ERRO DE SINTAXE:\n");
 
-    Token currentToken = e.currentToken;
-    Token tokenEncontrado = null;
-    
-    if (currentToken != null && currentToken.next != null) {
-        tokenEncontrado = currentToken.next;
-    } else if (currentToken != null) {
-        tokenEncontrado = currentToken;
+    // Usa apenas currentToken para uma unica posicao correta
+    if (e.currentToken != null && e.currentToken.image != null) {
+        resultado.append("Token encontrado: '").append(e.currentToken.image).append("' na linha ")
+                .append(e.currentToken.beginLine).append(", coluna ").append(e.currentToken.beginColumn);
     } else {
-        try {
-            tokenEncontrado = getToken(1);
-        } catch (Exception ex) {
-            tokenEncontrado = null;
-        }
-    }
-    
-    if (tokenEncontrado != null && tokenEncontrado.image != null) {
-        resultado.append("Token encontrado: '").append(tokenEncontrado.image).append("' na linha ")
-                .append(tokenEncontrado.beginLine).append(", coluna ").append(tokenEncontrado.beginColumn);
-    } else {
-        if (currentToken != null) {
-            String tokenImage = currentToken.image != null ? currentToken.image : "EOF";
-            int linha = currentToken.beginLine > 0 ? currentToken.beginLine : 1;
-            int coluna = currentToken.beginColumn > 0 ? currentToken.beginColumn : 1;
-            resultado.append("Token encontrado: '").append(tokenImage).append("' na linha ")
-                    .append(linha).append(", coluna ").append(coluna);
-        } else {
-            resultado.append("Token encontrado: fim de arquivo inesperado");
-        }
+        resultado.append("Token encontrado: fim de arquivo inesperado");
     }
     
     if (e.expectedTokenSequences.length > 0) {
