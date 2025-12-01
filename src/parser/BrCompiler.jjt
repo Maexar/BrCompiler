@@ -310,8 +310,8 @@ public class BrCompiler
   static void consumeUntil(RecoverySet g, ParseException e, String met) throws ParseEOFException {
     Token tok;
     
-    ErrorManager.startRecovery();
     ErrorManager.addError(e, met, g);
+    ErrorManager.startRecovery();
     printDetalhesErro(e);
 
     System.out.println("\n*** " + met + " ***");
@@ -338,6 +338,17 @@ public class BrCompiler
         
         System.out.println("    Ignorando o token: '" + im(tok.kind) + "'");
         ErrorManager.tokenConsumed();
+        
+        // Processa delimitadores mesmo durante recuperação para manter balanceamento
+        if (tok.kind == ABREBLOCO || tok.kind == FECHABLOCO || 
+            tok.kind == ABRIREXP || tok.kind == FECHAREXP) {
+            try {
+                delimiterBalancer.processToken(tok.kind, tok.beginLine, tok.beginColumn);
+            } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
+                // Durante recuperação, ignora erros de balanceamento temporários
+                // O balanceamento final será verificado no método main
+            }
+        }
         
         getNextToken();
         tok = getToken(1);
@@ -400,10 +411,9 @@ TOKEN_MGR_DECLS :
             try {
                 parser.BrCompiler.delimiterBalancer.processToken(t.kind, t.beginLine, t.beginColumn);
             } catch (recovery.DelimiterBalancer.UnbalancedDelimiterException ex) {
-                // Armazena o erro para ser reportado depois
-                if (parser.BrCompiler.balanceException == null) {
-                    parser.BrCompiler.balanceException = ex;
-                }
+                // Durante o parsing, ignora erros de balanceamento
+                // Eles serão verificados no final pelo checkBalance()
+                // Isso evita falsos positivos durante recuperação de erro
             }
         }
     }

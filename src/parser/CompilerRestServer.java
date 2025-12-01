@@ -8,6 +8,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.ArrayList;
 
 public class CompilerRestServer {
     private static final int PORT = 8085;
@@ -117,22 +118,35 @@ public class CompilerRestServer {
             // Tenta compilar
             compiler.main();
             
-            // Verifica balanceamento de delimitadores
+            // CONSOLIDAR TODOS OS ERROS (balanceamento + ErrorManager)
+            List<ErrorManager.SyntaxError> allErrors = new ArrayList<>();
+            
+            // 1. Adiciona erros do ErrorManager
+            if (ErrorManager.hasErrors()) {
+                allErrors.addAll(ErrorManager.getErrors());
+            }
+            
+            // 2. Adiciona erros de balanceamento
             try {
                 BrCompiler.delimiterBalancer.checkBalance();
             } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
                 System.out.println("[DEBUG] Erro de balanceamento detectado");
-                return buildErrorResponse(
+                // Cria erro sintetico para balanceamento
+                ErrorManager.SyntaxError balanceError = new ErrorManager.SyntaxError(
                     "Erro de balanceamento: " + ex.getMessage(),
                     ex.line,
-                    ex.column
+                    ex.column,
+                    "balanceamento",
+                    "EOF",
+                    "fecha-te-sesamo"
                 );
+                allErrors.add(balanceError);
             }
             
-            // Verifica se houve erros acumulados durante recuperacao de panico
-            if (ErrorManager.hasErrors()) {
-                System.out.println("[DEBUG] Erros acumulados durante recuperacao");
-                return buildMultipleErrorsResponse(ErrorManager.getErrors());
+            // 3. Se houver erros, retorna todos consolidados
+            if (!allErrors.isEmpty()) {
+                System.out.println("[DEBUG] Total de " + allErrors.size() + " erro(s) encontrado(s)");
+                return buildMultipleErrorsResponse(allErrors);
             }
             
             // Sucesso completo
@@ -143,19 +157,28 @@ public class CompilerRestServer {
         } catch (ParseException e) {
             System.out.println("[DEBUG] ParseException capturada");
             
-            // Verifica se houve erros acumulados
+            // Consolidar erros do ErrorManager + este ParseException
+            List<ErrorManager.SyntaxError> allErrors = new ArrayList<>();
+            
             if (ErrorManager.hasErrors()) {
-                return buildMultipleErrorsResponse(ErrorManager.getErrors());
+                allErrors.addAll(ErrorManager.getErrors());
+            } else {
+                // Se nao ha erros no ErrorManager, adiciona este ParseException
+                String errorMsg = BrCompiler.handleParseError(e);
+                ErrorManager.SyntaxError parseError = extractErrorFromMessage(errorMsg, "parseException");
+                allErrors.add(parseError);
             }
             
-            // Erro unico
-            String errorMsg = BrCompiler.handleParseError(e);
-            return extractAndBuildErrorResponse(errorMsg);
+            return buildMultipleErrorsResponse(allErrors);
             
         } catch (TokenMgrError e) {
             System.out.println("[DEBUG] TokenMgrError capturado");
             String errorMsg = BrCompiler.handleTokenMgrError(e);
-            return extractAndBuildErrorResponse(errorMsg);
+            ErrorManager.SyntaxError lexError = extractErrorFromMessage(errorMsg, "lexico");
+            
+            List<ErrorManager.SyntaxError> allErrors = new ArrayList<>();
+            allErrors.add(lexError);
+            return buildMultipleErrorsResponse(allErrors);
             
         } catch (Exception e) {
             System.out.println("[DEBUG] Exception generica capturada");
@@ -163,6 +186,35 @@ public class CompilerRestServer {
             e.printStackTrace();
             return "{\"success\":false,\"error\":\"" + escapeJson(errorMsg) + "\"}";
         }
+    }
+    
+    /**
+     * Extrai erro de mensagem formatada e cria SyntaxError
+     */
+    private static ErrorManager.SyntaxError extractErrorFromMessage(String errorMsg, String context) {
+        int line = 0;
+        int column = 0;
+        int posicaoStart = errorMsg.indexOf("[POSICAO]");
+        int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
+        
+        if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
+            try {
+                String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
+                String[] partes = posicaoStr.split(",");
+                if (partes.length == 2) {
+                    line = Integer.parseInt(partes[0].trim());
+                    column = Integer.parseInt(partes[1].trim());
+                }
+                errorMsg = errorMsg.substring(0, posicaoStart) + 
+                           (posicaoEnd + 12 < errorMsg.length() ? 
+                            errorMsg.substring(posicaoEnd + 12) : "");
+                errorMsg = errorMsg.trim();
+            } catch (Exception ex) {
+                System.out.println("[AVISO] Erro ao extrair posicao: " + ex.getMessage());
+            }
+        }
+        
+        return new ErrorManager.SyntaxError(errorMsg, line, column, context, "", "");
     }
     
     /**
@@ -188,43 +240,6 @@ public class CompilerRestServer {
         
         json.append("]}");
         return json.toString();
-    }
-    
-    /**
-     * Constroi resposta JSON com erro unico
-     */
-    private static String buildErrorResponse(String message, int line, int column) {
-        return "{\"success\":false,\"error\":\"" + escapeJson(message) + 
-               "\",\"line\":" + line + ",\"column\":" + column + "}";
-    }
-    
-    /**
-     * Extrai posicao de mensagem formatada e constroi JSON
-     */
-    private static String extractAndBuildErrorResponse(String errorMsg) {
-        int line = 0;
-        int column = 0;
-        int posicaoStart = errorMsg.indexOf("[POSICAO]");
-        int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
-        
-        if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
-            try {
-                String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
-                String[] partes = posicaoStr.split(",");
-                if (partes.length == 2) {
-                    line = Integer.parseInt(partes[0].trim());
-                    column = Integer.parseInt(partes[1].trim());
-                }
-                errorMsg = errorMsg.substring(0, posicaoStart) + 
-                           (posicaoEnd + 12 < errorMsg.length() ? 
-                            errorMsg.substring(posicaoEnd + 12) : "");
-                errorMsg = errorMsg.trim();
-            } catch (Exception ex) {
-                System.out.println("[AVISO] Erro ao extrair posicao: " + ex.getMessage());
-            }
-        }
-        
-        return buildErrorResponse(errorMsg, line, column);
     }
     
     private static int countLines(String code) {
