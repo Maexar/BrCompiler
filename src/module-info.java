@@ -5,7 +5,6 @@
  * 
  */
 module BrCompiler {
-	 exports compiler;
 	 exports parser;
 	 exports recovery;
 	 requires java.base;

@@ -1,9 +1,13 @@
-package compiler;
+package parser;
 
 import com.sun.net.httpserver.*;
+import recovery.ErrorManager;
+import recovery.DelimiterBalancer;
+
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 public class CompilerRestServer {
     private static final int PORT = 8085;
@@ -28,7 +32,7 @@ public class CompilerRestServer {
                                             StandardCharsets.UTF_8);
                     String code = extractCode(body);
                     
-                    System.out.println("[DEBUG] Código recebido: " + code);
+                    System.out.println("[DEBUG] Codigo recebido: " + code);
                     
                     String result = compileCode(code);
                     
@@ -40,7 +44,7 @@ public class CompilerRestServer {
                     exchange.getResponseBody().write(result.getBytes());
                     exchange.close();
                 } catch (Exception e) {
-                    System.out.println("[ERRO] Exceção: " + e.getMessage());
+                    System.out.println("[ERRO] Excecao: " + e.getMessage());
                     e.printStackTrace();
                     try {
                         String response = "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}";
@@ -88,97 +92,139 @@ public class CompilerRestServer {
     
     private static String compileCode(String code) {
         if (code == null || code.trim().isEmpty()) {
-            return "{\"success\":false,\"error\":\"Código vazio\"}";
+            return "{\"success\":false,\"error\":\"Codigo vazio\"}";
         }
         
         try {
-            System.out.println("[DEBUG] Tentando compilar código...");
+            System.out.println("[DEBUG] Tentando compilar codigo...");
+            
+            // RESET COMPLETO DO ESTADO
+            ErrorManager.clear();
+            BrCompiler.eof = false;
+            BrCompiler.lastError = null;
+            BrCompiler.delimiterBalancer = new DelimiterBalancer();
             
             java.io.StringReader reader = new java.io.StringReader(code);
             
             if (compiler == null) {
-                System.out.println("[DEBUG] Primeira chamada - criando instância BrCompiler");
+                System.out.println("[DEBUG] Primeira chamada - criando instancia BrCompiler");
                 compiler = new BrCompiler(reader);
             } else {
-                System.out.println("[DEBUG] ReInit do BrCompiler com novo código");
+                System.out.println("[DEBUG] ReInit do BrCompiler com novo codigo");
                 BrCompiler.ReInit(reader);
             }
             
+            // Tenta compilar
             compiler.main();
             
-            System.out.println("[DEBUG] Compilação bem-sucedida!");
-            return "{\"success\":true,\"message\":\"Código compilado com sucesso\",\"lines\":" + 
+            // Verifica balanceamento de delimitadores
+            try {
+                BrCompiler.delimiterBalancer.checkBalance();
+            } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
+                System.out.println("[DEBUG] Erro de balanceamento detectado");
+                return buildErrorResponse(
+                    "Erro de balanceamento: " + ex.getMessage(),
+                    ex.line,
+                    ex.column
+                );
+            }
+            
+            // Verifica se houve erros acumulados durante recuperacao de panico
+            if (ErrorManager.hasErrors()) {
+                System.out.println("[DEBUG] Erros acumulados durante recuperacao");
+                return buildMultipleErrorsResponse(ErrorManager.getErrors());
+            }
+            
+            // Sucesso completo
+            System.out.println("[DEBUG] Compilacao bem-sucedida!");
+            return "{\"success\":true,\"message\":\"Codigo compilado com sucesso\",\"lines\":" + 
                    countLines(code) + "}";
             
         } catch (ParseException e) {
             System.out.println("[DEBUG] ParseException capturada");
-            String errorMsg = BrCompiler.handleParseError(e);
             
-            // Extrai posicao do marcador [POSICAO]linha,coluna[/POSICAO]
-            int line = 0;
-            int column = 0;
-            int posicaoStart = errorMsg.indexOf("[POSICAO]");
-            int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
-            
-            if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
-                try {
-                    String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
-                    String[] partes = posicaoStr.split(",");
-                    if (partes.length == 2) {
-                        line = Integer.parseInt(partes[0].trim());
-                        column = Integer.parseInt(partes[1].trim());
-                    }
-                    // Remove os marcadores da mensagem de erro
-                    errorMsg = errorMsg.substring(0, posicaoStart) + 
-                               (posicaoEnd + 12 < errorMsg.length() ? 
-                                errorMsg.substring(posicaoEnd + 12) : "");
-                    errorMsg = errorMsg.trim();
-                } catch (Exception ex) {
-                    System.out.println("[AVISO] Erro ao extrair posição: " + ex.getMessage());
-                }
+            // Verifica se houve erros acumulados
+            if (ErrorManager.hasErrors()) {
+                return buildMultipleErrorsResponse(ErrorManager.getErrors());
             }
             
-            return "{\"success\":false,\"error\":\"" + 
-                   escapeJson(errorMsg) + "\",\"line\":" + line + ",\"column\":" + column + "}";
+            // Erro unico
+            String errorMsg = BrCompiler.handleParseError(e);
+            return extractAndBuildErrorResponse(errorMsg);
             
         } catch (TokenMgrError e) {
             System.out.println("[DEBUG] TokenMgrError capturado");
             String errorMsg = BrCompiler.handleTokenMgrError(e);
-            
-            // Extrai posicao do marcador [POSICAO]linha,coluna[/POSICAO]
-            int line = 0;
-            int column = 0;
-            int posicaoStart = errorMsg.indexOf("[POSICAO]");
-            int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
-            
-            if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
-                try {
-                    String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
-                    String[] partes = posicaoStr.split(",");
-                    if (partes.length == 2) {
-                        line = Integer.parseInt(partes[0].trim());
-                        column = Integer.parseInt(partes[1].trim());
-                    }
-                    // Remove os marcadores da mensagem de erro
-                    errorMsg = errorMsg.substring(0, posicaoStart) + 
-                               (posicaoEnd + 12 < errorMsg.length() ? 
-                                errorMsg.substring(posicaoEnd + 12) : "");
-                    errorMsg = errorMsg.trim();
-                } catch (Exception ex) {
-                    System.out.println("[AVISO] Erro ao extrair posição: " + ex.getMessage());
-                }
-            }
-            
-            return "{\"success\":false,\"error\":\"" + 
-                   escapeJson(errorMsg) + "\",\"line\":" + line + ",\"column\":" + column + "}";
+            return extractAndBuildErrorResponse(errorMsg);
             
         } catch (Exception e) {
-            System.out.println("[DEBUG] Exception genérica capturada");
+            System.out.println("[DEBUG] Exception generica capturada");
             String errorMsg = e.getMessage() != null ? e.getMessage() : "Erro desconhecido";
             e.printStackTrace();
-            return "{\"success\":false,\"error\":\"" + 
-                   escapeJson(errorMsg) + "\"}";
+            return "{\"success\":false,\"error\":\"" + escapeJson(errorMsg) + "\"}";
         }
+    }
+    
+    /**
+     * Constroi resposta JSON com multiplos erros (array)
+     */
+    private static String buildMultipleErrorsResponse(List<ErrorManager.SyntaxError> errors) {
+        StringBuilder json = new StringBuilder();
+        json.append("{\"success\":false,\"errors\":[");
+        
+        boolean first = true;
+        for (ErrorManager.SyntaxError error : errors) {
+            if (!first) json.append(",");
+            json.append("{");
+            json.append("\"message\":\"").append(escapeJson(error.getMessage())).append("\",");
+            json.append("\"line\":").append(error.getLine()).append(",");
+            json.append("\"column\":").append(error.getColumn()).append(",");
+            json.append("\"context\":\"").append(escapeJson(error.getContext())).append("\",");
+            json.append("\"foundToken\":\"").append(escapeJson(error.getFoundToken())).append("\",");
+            json.append("\"expectedTokens\":\"").append(escapeJson(error.getExpectedTokens())).append("\"");
+            json.append("}");
+            first = false;
+        }
+        
+        json.append("]}");
+        return json.toString();
+    }
+    
+    /**
+     * Constroi resposta JSON com erro unico
+     */
+    private static String buildErrorResponse(String message, int line, int column) {
+        return "{\"success\":false,\"error\":\"" + escapeJson(message) + 
+               "\",\"line\":" + line + ",\"column\":" + column + "}";
+    }
+    
+    /**
+     * Extrai posicao de mensagem formatada e constroi JSON
+     */
+    private static String extractAndBuildErrorResponse(String errorMsg) {
+        int line = 0;
+        int column = 0;
+        int posicaoStart = errorMsg.indexOf("[POSICAO]");
+        int posicaoEnd = errorMsg.indexOf("[/POSICAO]");
+        
+        if (posicaoStart != -1 && posicaoEnd != -1 && posicaoEnd > posicaoStart) {
+            try {
+                String posicaoStr = errorMsg.substring(posicaoStart + 9, posicaoEnd);
+                String[] partes = posicaoStr.split(",");
+                if (partes.length == 2) {
+                    line = Integer.parseInt(partes[0].trim());
+                    column = Integer.parseInt(partes[1].trim());
+                }
+                errorMsg = errorMsg.substring(0, posicaoStart) + 
+                           (posicaoEnd + 12 < errorMsg.length() ? 
+                            errorMsg.substring(posicaoEnd + 12) : "");
+                errorMsg = errorMsg.trim();
+            } catch (Exception ex) {
+                System.out.println("[AVISO] Erro ao extrair posicao: " + ex.getMessage());
+            }
+        }
+        
+        return buildErrorResponse(errorMsg, line, column);
     }
     
     private static int countLines(String code) {
@@ -195,7 +241,7 @@ public class CompilerRestServer {
                 return code.replace("\\n", "\n").replace("\\t", "\t");
             }
         } catch (Exception e) {
-            System.err.println("Erro ao extrair código: " + e.getMessage());
+            System.err.println("Erro ao extrair codigo: " + e.getMessage());
         }
         return "";
     }
@@ -205,6 +251,7 @@ public class CompilerRestServer {
         return text.replace("\"", "'")
                    .replace("\n", " ")
                    .replace("\r", " ")
-                   .replace("\t", " ");
+                   .replace("\t", " ")
+                   .replace("\\", "/");
     }
 }
