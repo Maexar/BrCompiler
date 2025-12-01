@@ -488,7 +488,7 @@ TOKEN: /*operacoes*/
  <OPIGUAL: "==">|
  <OPMENOR: "<">|
  <OPDIF: "!=">|
- <OPMAIORIGUAL: " >=" >|
+ <OPMAIORIGUAL: ">=" >|
  <OPMENORIGUAL: "<=" >|
  <OPAND: "&&" >|
  <OPOR: "|" >
