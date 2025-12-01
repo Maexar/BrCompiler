@@ -6,6 +6,7 @@
 options
 {
   static = true;
+  COMMON_TOKEN_ACTION = true;
 }
 
 PARSER_BEGIN(BrCompiler)
@@ -14,6 +15,11 @@ package parser;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import recovery.RecoverySet;
+import recovery.ParseEOFException;
+import recovery.Follow;
+import recovery.ErrorManager;
+import recovery.DelimiterBalancer;
 
 public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants/*@egen*/
 {/*@bgen(jjtree)*/
@@ -21,9 +27,10 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants/*@ege
 
 /*@egen*/
   private static boolean parserInitialized = false;
-  
+  static DelimiterBalancer delimiterBalancer = new DelimiterBalancer();
+  static DelimiterBalancer.UnbalancedDelimiterException balanceException = null;
 
-  private static String obterTokenPortugues(int tipoToken) {
+  public static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
       case INICIOPROG: return "gambiarra";
       case ABREBLOCO: return "abre-te-sesamo";
@@ -79,14 +86,12 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants/*@ege
     }
   }
 
-public static String handleParseError(ParseException e) {
+  public static String handleParseError(ParseException e) {
     StringBuilder resultado = new StringBuilder();
     
-    // Detecta bloco n\u00e3o fechado: FECHABLOCO est\u00e1 entre as op\u00e7\u00f5es esperadas
     if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
         boolean temFechabloco = false;
         
-        // Procura FECHABLOCO em QUALQUER sequ\u00eancia esperada
         for (int[] sequence : e.expectedTokenSequences) {
             for (int tokenType : sequence) {
                 if (tokenType == FECHABLOCO) {
@@ -97,54 +102,20 @@ public static String handleParseError(ParseException e) {
             if (temFechabloco) break;
         }
         
-        // Se FECHABLOCO est\u00e1 entre as op\u00e7\u00f5es, \u00e9 bloco n\u00e3o fechado
         if (temFechabloco) {
             resultado.append("ERRO DE SINTAXE: Bloco nao fechado\n");
-            resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando\n");
+            resultado.append("Faltou adicionar fecha-te-sesamo para fechar bloco de comando\n");
             
             if (e.currentToken != null) {
-                resultado.append("[POSICAO]").append(e.currentToken.beginLine).append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
+                resultado.append("[POSICAO]").append(e.currentToken.beginLine)
+                         .append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
             }
             return resultado.toString();
         }
     }
     
-    // ===== RESTO DO C\u00d3DIGO (S\u00d3 EXECUTA SE N\u00c3O FOR BLOCO N\u00c3O FECHADO) =====
-    
-    resultado.append("ERRO DE SINTAXE: ");
-
-    Token tokenComErro = null;
-    if (e.currentToken != null && e.currentToken.next != null) {
-        tokenComErro = e.currentToken.next;
-    } else if (e.currentToken != null) {
-        tokenComErro = e.currentToken;
-    }
-    
-    if (tokenComErro != null && tokenComErro.image != null && !tokenComErro.image.isEmpty()) {
-        resultado.append("Token encontrado: '").append(tokenComErro.image).append("'");
-    } else {
-        resultado.append("Token encontrado: fim de arquivo inesperado");
-    }
-    
-    if (e.expectedTokenSequences.length > 0) {
-        resultado.append("\nEra esperado: ");
-        boolean first = true;
-        for (int[] sequence : e.expectedTokenSequences) {
-            if (!first) resultado.append(" ou ");
-            for (int i = 0; i < sequence.length; i++) {
-                if (i > 0) resultado.append(" ");
-                resultado.append("'").append(obterTokenPortugues(sequence[i])).append("'");
-            }
-            first = false;
-        }
-    }
-    
-    if (tokenComErro != null) {
-        resultado.append("\n[POSICAO]").append(tokenComErro.beginLine).append(",").append(tokenComErro.beginColumn).append("[/POSICAO]");
-    }
-    
-    return resultado.toString();
-}
+    return "ERRO DE SINTAXE: Erro nao recuperado - consulte relatorio de erros";
+  }
 
   public static String handleTokenMgrError(TokenMgrError e) {
     String msg = e.getMessage();
@@ -199,7 +170,6 @@ public static String handleParseError(ParseException e) {
             }
         }
     } catch (Exception ex) {
-        // manter valores padrao
     }
     
     if (charEncontrado.startsWith("'") && charEncontrado.endsWith("'") && charEncontrado.length() > 1) {
@@ -235,7 +205,7 @@ public static String handleParseError(ParseException e) {
     }
   }
   
-  public static void main(String args[]) throws ParseException {
+  public static void main(String args[]) {
     if (!parserInitialized) {
         new BrCompiler(System.in);
         parserInitialized = true;
@@ -260,17 +230,60 @@ public static String handleParseError(ParseException e) {
             if (line.isEmpty()) {
                 continue;
             }
+
+            ErrorManager.clear();
+            eof = false;
+            lastError = null;
+            delimiterBalancer = new DelimiterBalancer();
+            balanceException = null;
             
             BrCompiler.ReInit(new StringReader(line));
-            BrCompiler.main();
-            System.out.println("OK.");
             
-        } catch (ParseException e) {
-            System.out.println("NOK.");
-            System.out.println(handleParseError(e));
+            boolean hasBalanceError = false;
+            String balanceErrorMsg = null;
+            
+            try {
+                BrCompiler.main();
+            } catch (ParseEOFException e) {
+                System.out.println("ERRO FATAL: " + e.getMessage());
+                ErrorManager.addError(new ParseException("EOF inesperado"), "main", null);
+            } catch (ParseException e) {
+                ErrorManager.addError(e, "main", null);
+            } finally {
+                // Verifica erros de balanceamento durante tokeniza\u00e7\u00e3o
+                if (balanceException != null) {
+                    hasBalanceError = true;
+                    balanceErrorMsg = balanceException.getMessage();
+                } else {
+                    // Verifica o balanceamento no final, se n\u00e3o houve erro durante tokeniza\u00e7\u00e3o
+                    try {
+                        delimiterBalancer.checkBalance();
+                    } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
+                        hasBalanceError = true;
+                        balanceErrorMsg = ex.getMessage();
+                    }
+                }
+            }
+            
+            // Exibe erros de balanceamento
+            if (hasBalanceError) {
+                System.out.println("ERRO DE BALANCEAMENTO: " + balanceErrorMsg);
+            }
+            
+            // Exibe resultado final
+            if (ErrorManager.hasErrors() || hasBalanceError) {
+                System.out.println("\nNOK.");
+                if (ErrorManager.hasErrors()) {
+                    System.out.println(ErrorManager.getErrorReport());
+                }
+            } else {
+                System.out.println("\nOK.");
+            }
+            
         } catch (TokenMgrError e) {
             System.out.println("NOK.");
             System.out.println(handleTokenMgrError(e));
+            
         } catch (Exception e) {
             System.out.println("NOK.");
             System.out.println("ERRO INESPERADO: " + e.getMessage());
@@ -283,62 +296,122 @@ public static String handleParseError(ParseException e) {
     }
   }
 
-  static public String im(int x)
-  {
+  static public String im(int x) {
     int k;
-	String s;
+    String s;
     s = tokenImage[x];
     k = s.lastIndexOf("\"");
     try {
       s = s.substring(1,k);
     }
-   catch (StringIndexOutOfBoundsException e)
-	   {}
-   return s;
+    catch (StringIndexOutOfBoundsException e) {}
+    return s;
   }
 	
   static Token lastError = null;
-  static boolean eof;    // vari\u00e1vel que indica se EOF foi alcan\u00e7ado
-	
-  // o m\u00e9todo abaixo consome tokens at\u00e9 alcan\u00e7ar um que perten\u00e7a ao conjunto
-  // de sincroniza\u00e7\u00e3o
-  static void consumeUntil(RecoverySet g,
-	                 ParseException e,
-	                 String met) throws ParseEOFException,
-	                                    ParseException
-  {
-	Token tok;
-	System.out.println();
-	System.out.println("*** " + met + " ***");
-	System.out.println("     Conjunto de sincroniza\u00e7\u00e3o: " + g);
-		
-	if (g == null) throw e; // se o conjunto \u00e9 null, propaga a exce\u00e7\u00e3o
-	
-	tok = getToken(1); // pega token corrente
-	while ( ! eof )	{ // se n\u00e3o chegou ao fim do arquivo
-	  if ( g.contains(tok.kind)) {//achou um token no conjunto
-	    System.out.println("     Encontrado token de sincroniza\u00e7\u00e3o: " + 
-	                       im(tok.kind));
-	    break;
-	  }
-	  System.out.println("     Ignorando o token: " + im(tok.kind));
-	  getNextToken();     // pega pr\u00f3ximo token       
-      tok = getToken(1);
-	  if (tok.kind == EOF && ! g.contains(EOF) ) // fim da entrada?   
-	      eof = true;
-	}
-    if ( tok != lastError)  {
-	  System.out.println(e.getMessage());
-	  lastError = tok;
-	   
-	}
-	if ( eof )
-	  throw new ParseEOFException("Encontrei EOF onde n\u00e3o deveria.");
+  static boolean eof;
+  
+  static void consumeUntil(RecoverySet g, ParseException e, String met) throws ParseEOFException {
+    Token tok;
+    
+    ErrorManager.startRecovery();
+    ErrorManager.addError(e, met, g);
+    printDetalhesErro(e);
+
+    System.out.println("\n*** " + met + " ***");
+    System.out.println("    Conjunto de sincronizacao: " + g);
+    
+    if (g == null) {
+        ErrorManager.endRecovery();
+        throw new ParseEOFException("Conjunto de sincronizacao nulo em " + met);
+    }
+    
+    tok = getToken(1);
+    
+    while (true) {
+        if (g.contains(tok.kind)) {
+            System.out.println("    Token sincronizado: '" + im(tok.kind) + "'");
+            ErrorManager.endRecovery();
+            return;
+        }
+        
+        if (tok.kind == EOF) {
+            eof = true;
+            break;
+        }
+        
+        System.out.println("    Ignorando o token: '" + im(tok.kind) + "'");
+        ErrorManager.tokenConsumed();
+        
+        getNextToken();
+        tok = getToken(1);
+    }
+    
+    ErrorManager.endRecovery();
+    
+    if (eof && g.contains(EOF)) {
+        System.out.println("    EOF sincronizado - fim do arquivo");
+        return;
+    }
+    
+    if (eof) {
+        throw new ParseEOFException("EOF alcancado durante recuperacao em " + met + " - esperava: " + g);
+    }
+    
+    throw new ParseEOFException("Sem sincronizacao em " + met);
+  }
+
+  static void printDetalhesErro(ParseException e) {
+    StringBuilder sb = new StringBuilder();
+    Token tokenErro = null;
+
+    if (e.currentToken != null && e.currentToken.next != null) {
+        tokenErro = e.currentToken.next;
+    } else if (e.currentToken != null) {
+        tokenErro = e.currentToken;
+    }
+
+    String tokenEncontrado = (tokenErro != null && tokenErro.image != null) ? tokenErro.image : "EOF";
+
+    sb.append("Token encontrado: '").append(tokenEncontrado).append("'\n");
+
+    if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
+        sb.append("Era esperado: ");
+        boolean firstSeq = true;
+        for (int[] seq : e.expectedTokenSequences) {
+            if (!firstSeq) sb.append(" ou ");
+            for (int i = 0; i < seq.length; i++) {
+                if (i > 0) sb.append(" ");
+                sb.append("'").append(obterTokenPortugues(seq[i])).append("'");
+            }
+            firstSeq = false;
+        }
+        sb.append("\n");
+    }
+
+    System.out.print(sb.toString());
   }
 
 }
 
 PARSER_END(BrCompiler)
+
+TOKEN_MGR_DECLS :
+{
+    static void CommonTokenAction(Token t) {
+        if (t.kind == ABREBLOCO || t.kind == FECHABLOCO || 
+            t.kind == ABRIREXP || t.kind == FECHAREXP) {
+            try {
+                parser.BrCompiler.delimiterBalancer.processToken(t.kind, t.beginLine, t.beginColumn);
+            } catch (recovery.DelimiterBalancer.UnbalancedDelimiterException ex) {
+                // Armazena o erro para ser reportado depois
+                if (parser.BrCompiler.balanceException == null) {
+                    parser.BrCompiler.balanceException = ex;
+                }
+            }
+        }
+    }
+}
 
 SKIP :
 {
@@ -346,7 +419,6 @@ SKIP :
 | "\r"
 | "\t"
 | "\n"
-
 }
 
 TOKEN : /*funcoes */
@@ -359,10 +431,9 @@ TOKEN : /*funcoes */
   <FUNCAO: "vai-filhao" >|
   <RETURN: "devolva">|
   <VIRGULA: ",">
-  
 }
 
-TOKEN : /*estrururas de dados*/
+TOKEN : /*estruturas de dados*/
 {
   <LISTA: "tropa-do-gordao" >| 
   <ADICIONAR: "recrutar" >  |
@@ -429,7 +500,7 @@ void main() :
   try { 
     <INICIOPROG> <ABREBLOCO> bloco() <FECHABLOCO>
   } catch(ParseException e) {
-    consumeUntil(g, e, "main"); 
+    consumeUntil(g, e, "main");
   }/*@bgen(jjtree)*/
   } catch (Throwable jjte000) {
     if (jjtc000) {
@@ -491,7 +562,6 @@ void bloco():
 /*@egen*/
 }
 
-/* ========== COMANDO REFATORADO ========== */
 void comando():
 {/*@bgen(jjtree) comando */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDO);
@@ -535,7 +605,6 @@ void comando():
 /*@egen*/
 }
 
-/* ===== FATORA\u00c7\u00c3O PARA COMANDOS COM IDENTIFICADOR ===== */
 void comandoIdentificador():
 {/*@bgen(jjtree) comandoIdentificador */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDOIDENTIFICADOR);
@@ -649,8 +718,6 @@ void sufixoExpressao():
   }
 /*@egen*/
 }
-
-/* ===================================================== */
 
 void declaraVariavel():
 {/*@bgen(jjtree) declaraVariavel */
@@ -870,7 +937,6 @@ void fator():
 /*@egen*/
 }
 
-/* ========== TERMO REFATORADO ========== */
 void termo(): 
 {/*@bgen(jjtree) termo */
   SimpleNode jjtn000 = new SimpleNode(JJTTERMO);
@@ -954,16 +1020,12 @@ void termoIdentificadorSufixo():
 /*@egen*/
 }
 
-/* ===================================================== */
-
 void operadorLogico():
-/* Recupera\u00e7\u00e3o de erro em operador l\u00f3gico geralmente n\u00e3o \u00e9 necess\u00e1ria se Expressao j\u00e1 trata, 
-   mas para seguir o padr\u00e3o: */
 {/*@bgen(jjtree) operadorLogico */
   SimpleNode jjtn000 = new SimpleNode(JJTOPERADORLOGICO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);
-/*@egen*/ RecoverySet g = Follow.expressao; /* Usa o mesmo de express\u00e3o pois conecta express\u00f5es */ }
+/*@egen*/ RecoverySet g = Follow.expressao; }
 {/*@bgen(jjtree) operadorLogico */
   try {
 /*@egen*/

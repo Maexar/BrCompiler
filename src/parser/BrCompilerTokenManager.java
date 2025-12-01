@@ -4,10 +4,28 @@ package parser;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import recovery.RecoverySet;
+import recovery.ParseEOFException;
+import recovery.Follow;
+import recovery.ErrorManager;
+import recovery.DelimiterBalancer;
 
 /** Token Manager. */
 @SuppressWarnings ("unused")
 public class BrCompilerTokenManager implements BrCompilerConstants {
+    static void CommonTokenAction(Token t) {
+        if (t.kind == ABREBLOCO || t.kind == FECHABLOCO ||
+            t.kind == ABRIREXP || t.kind == FECHAREXP) {
+            try {
+                parser.BrCompiler.delimiterBalancer.processToken(t.kind, t.beginLine, t.beginColumn);
+            } catch (recovery.DelimiterBalancer.UnbalancedDelimiterException ex) {
+                // Armazena o erro para ser reportado depois
+                if (parser.BrCompiler.balanceException == null) {
+                    parser.BrCompiler.balanceException = ex;
+                }
+            }
+        }
+    }
 
   /** Debug output. */
   public static  java.io.PrintStream debugStream = System.out;
@@ -975,6 +993,7 @@ public static Token getNextToken()
       jjmatchedKind = 0;
       jjmatchedPos = -1;
       matchedToken = jjFillToken();
+      CommonTokenAction(matchedToken);
       return matchedToken;
    }
 
@@ -993,6 +1012,7 @@ public static Token getNextToken()
       if ((jjtoToken[jjmatchedKind >> 6] & (1L << (jjmatchedKind & 077))) != 0L)
       {
          matchedToken = jjFillToken();
+         CommonTokenAction(matchedToken);
          return matchedToken;
       }
       else

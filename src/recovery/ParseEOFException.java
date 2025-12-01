@@ -1,6 +1,8 @@
 package recovery;
 
-public class ParseEOFException extends Exception {
+import parser.ParseException;
+
+public class ParseEOFException extends ParseException {
     public ParseEOFException(String x) {
         super(x);
     }

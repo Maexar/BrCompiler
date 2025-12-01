@@ -5,14 +5,18 @@ package parser;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.StringReader;
-
-import recovery.*;
+import recovery.RecoverySet;
+import recovery.ParseEOFException;
+import recovery.Follow;
+import recovery.ErrorManager;
+import recovery.DelimiterBalancer;
 
 public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCompilerConstants {/*@bgen(jjtree)*/
   protected static JJTBrCompilerState jjtree = new JJTBrCompilerState();private static boolean parserInitialized = false;
+  static DelimiterBalancer delimiterBalancer = new DelimiterBalancer();
+  static DelimiterBalancer.UnbalancedDelimiterException balanceException = null;
 
-
-  private static String obterTokenPortugues(int tipoToken) {
+  public static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
       case INICIOPROG: return "gambiarra";
       case ABREBLOCO: return "abre-te-sesamo";
@@ -68,14 +72,12 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCo
     }
   }
 
-public static String handleParseError(ParseException e) {
+  public static String handleParseError(ParseException e) {
     StringBuilder resultado = new StringBuilder();
 
-    // Detecta bloco não fechado: FECHABLOCO está entre as opções esperadas
     if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
         boolean temFechabloco = false;
 
-        // Procura FECHABLOCO em QUALQUER sequência esperada
         for (int[] sequence : e.expectedTokenSequences) {
             for (int tokenType : sequence) {
                 if (tokenType == FECHABLOCO) {
@@ -86,54 +88,20 @@ public static String handleParseError(ParseException e) {
             if (temFechabloco) break;
         }
 
-        // Se FECHABLOCO está entre as opções, é bloco não fechado
         if (temFechabloco) {
             resultado.append("ERRO DE SINTAXE: Bloco nao fechado\n");
-            resultado.append("Faltou adicionar 'fecha-te-sesamo' para fechar bloco de comando\n");
+            resultado.append("Faltou adicionar fecha-te-sesamo para fechar bloco de comando\n");
 
             if (e.currentToken != null) {
-                resultado.append("[POSICAO]").append(e.currentToken.beginLine).append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
+                resultado.append("[POSICAO]").append(e.currentToken.beginLine)
+                         .append(",").append(e.currentToken.beginColumn).append("[/POSICAO]");
             }
             return resultado.toString();
         }
     }
 
-    // ===== RESTO DO CÓDIGO (SÓ EXECUTA SE NÃO FOR BLOCO NÃO FECHADO) =====
-
-    resultado.append("ERRO DE SINTAXE: ");
-
-    Token tokenComErro = null;
-    if (e.currentToken != null && e.currentToken.next != null) {
-        tokenComErro = e.currentToken.next;
-    } else if (e.currentToken != null) {
-        tokenComErro = e.currentToken;
-    }
-
-    if (tokenComErro != null && tokenComErro.image != null && !tokenComErro.image.isEmpty()) {
-        resultado.append("Token encontrado: '").append(tokenComErro.image).append("'");
-    } else {
-        resultado.append("Token encontrado: fim de arquivo inesperado");
-    }
-
-    if (e.expectedTokenSequences.length > 0) {
-        resultado.append("\nEra esperado: ");
-        boolean first = true;
-        for (int[] sequence : e.expectedTokenSequences) {
-            if (!first) resultado.append(" ou ");
-            for (int i = 0; i < sequence.length; i++) {
-                if (i > 0) resultado.append(" ");
-                resultado.append("'").append(obterTokenPortugues(sequence[i])).append("'");
-            }
-            first = false;
-        }
-    }
-
-    if (tokenComErro != null) {
-        resultado.append("\n[POSICAO]").append(tokenComErro.beginLine).append(",").append(tokenComErro.beginColumn).append("[/POSICAO]");
-    }
-
-    return resultado.toString();
-}
+    return "ERRO DE SINTAXE: Erro nao recuperado - consulte relatorio de erros";
+  }
 
   public static String handleTokenMgrError(TokenMgrError e) {
     String msg = e.getMessage();
@@ -188,7 +156,6 @@ public static String handleParseError(ParseException e) {
             }
         }
     } catch (Exception ex) {
-        // manter valores padrao
     }
 
     if (charEncontrado.startsWith("'") && charEncontrado.endsWith("'") && charEncontrado.length() > 1) {
@@ -224,7 +191,7 @@ public static String handleParseError(ParseException e) {
     }
   }
 
-  public static void main(String args[]) throws ParseException {
+  public static void main(String args[]) {
     if (!parserInitialized) {
         new BrCompiler(System.in);
         parserInitialized = true;
@@ -250,16 +217,59 @@ public static String handleParseError(ParseException e) {
                 continue;
             }
 
-            BrCompiler.ReInit(new StringReader(line));
-            BrCompiler.main();
-            System.out.println("OK.");
+            ErrorManager.clear();
+            eof = false;
+            lastError = null;
+            delimiterBalancer = new DelimiterBalancer();
+            balanceException = null;
 
-        } catch (ParseException e) {
-            System.out.println("NOK.");
-            System.out.println(handleParseError(e));
+            BrCompiler.ReInit(new StringReader(line));
+
+            boolean hasBalanceError = false;
+            String balanceErrorMsg = null;
+
+            try {
+                BrCompiler.main();
+            } catch (ParseEOFException e) {
+                System.out.println("ERRO FATAL: " + e.getMessage());
+                ErrorManager.addError(new ParseException("EOF inesperado"), "main", null);
+            } catch (ParseException e) {
+                ErrorManager.addError(e, "main", null);
+            } finally {
+                // Verifica erros de balanceamento durante tokenização
+                if (balanceException != null) {
+                    hasBalanceError = true;
+                    balanceErrorMsg = balanceException.getMessage();
+                } else {
+                    // Verifica o balanceamento no final, se não houve erro durante tokenização
+                    try {
+                        delimiterBalancer.checkBalance();
+                    } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
+                        hasBalanceError = true;
+                        balanceErrorMsg = ex.getMessage();
+                    }
+                }
+            }
+
+            // Exibe erros de balanceamento
+            if (hasBalanceError) {
+                System.out.println("ERRO DE BALANCEAMENTO: " + balanceErrorMsg);
+            }
+
+            // Exibe resultado final
+            if (ErrorManager.hasErrors() || hasBalanceError) {
+                System.out.println("\nNOK.");
+                if (ErrorManager.hasErrors()) {
+                    System.out.println(ErrorManager.getErrorReport());
+                }
+            } else {
+                System.out.println("\nOK.");
+            }
+
         } catch (TokenMgrError e) {
             System.out.println("NOK.");
             System.out.println(handleTokenMgrError(e));
+
         } catch (Exception e) {
             System.out.println("NOK.");
             System.out.println("ERRO INESPERADO: " + e.getMessage());
@@ -272,63 +282,106 @@ public static String handleParseError(ParseException e) {
     }
   }
 
-  static public String im(int x)
-  {
+  static public String im(int x) {
     int k;
-        String s;
+    String s;
     s = tokenImage[x];
     k = s.lastIndexOf("\"");
     try {
       s = s.substring(1,k);
     }
-   catch (StringIndexOutOfBoundsException e)
-           {}
-   return s;
+    catch (StringIndexOutOfBoundsException e) {}
+    return s;
   }
 
   static Token lastError = null;
-  static boolean eof;    // variável que indica se EOF foi alcançado
+  static boolean eof;
 
-  // o método abaixo consome tokens até alcançar um que pertença ao conjunto
-  // de sincronização
-  static void consumeUntil(RecoverySet g,
-                         ParseException e,
-                         String met) throws ParseEOFException,
-                                            ParseException
-  {
-        Token tok;
-        System.out.println();
-        System.out.println("*** " + met + " ***");
-        System.out.println("     Conjunto de sincroniza\u00e7\u00e3o: " + g);
+  static void consumeUntil(RecoverySet g, ParseException e, String met) throws ParseEOFException {
+    Token tok;
 
-        if (g == null) throw e; // se o conjunto é null, propaga a exceção
+    ErrorManager.startRecovery();
+    ErrorManager.addError(e, met, g);
+    printDetalhesErro(e);
 
-        tok = getToken(1); // pega token corrente
-        while ( ! eof ) { // se não chegou ao fim do arquivo
-          if ( g.contains(tok.kind)) {//achou um token no conjunto
-            System.out.println("     Encontrado token de sincroniza\u00e7\u00e3o: " +
-                               im(tok.kind));
+    System.out.println("\n*** " + met + " ***");
+    System.out.println("    Conjunto de sincronizacao: " + g);
+
+    if (g == null) {
+        ErrorManager.endRecovery();
+        throw new ParseEOFException("Conjunto de sincronizacao nulo em " + met);
+    }
+
+    tok = getToken(1);
+
+    while (true) {
+        if (g.contains(tok.kind)) {
+            System.out.println("    Token sincronizado: '" + im(tok.kind) + "'");
+            ErrorManager.endRecovery();
+            return;
+        }
+
+        if (tok.kind == EOF) {
+            eof = true;
             break;
-          }
-          System.out.println("     Ignorando o token: " + im(tok.kind));
-          getNextToken();     // pega próximo token       
-      tok = getToken(1);
-          if (tok.kind == EOF && ! g.contains(EOF) ) // fim da entrada?   
-              eof = true;
         }
-    if ( tok != lastError)  {
-          System.out.println(e.getMessage());
-          lastError = tok;
 
-        }
-        if ( eof )
-          throw new ParseEOFException("Encontrei EOF onde n\u00e3o deveria.");
+        System.out.println("    Ignorando o token: '" + im(tok.kind) + "'");
+        ErrorManager.tokenConsumed();
+
+        getNextToken();
+        tok = getToken(1);
+    }
+
+    ErrorManager.endRecovery();
+
+    if (eof && g.contains(EOF)) {
+        System.out.println("    EOF sincronizado - fim do arquivo");
+        return;
+    }
+
+    if (eof) {
+        throw new ParseEOFException("EOF alcancado durante recuperacao em " + met + " - esperava: " + g);
+    }
+
+    throw new ParseEOFException("Sem sincronizacao em " + met);
   }
 
-  static final public void main() throws ParseException, ParseEOFException {/*@bgen(jjtree) main */
+  static void printDetalhesErro(ParseException e) {
+    StringBuilder sb = new StringBuilder();
+    Token tokenErro = null;
+
+    if (e.currentToken != null && e.currentToken.next != null) {
+        tokenErro = e.currentToken.next;
+    } else if (e.currentToken != null) {
+        tokenErro = e.currentToken;
+    }
+
+    String tokenEncontrado = (tokenErro != null && tokenErro.image != null) ? tokenErro.image : "EOF";
+
+    sb.append("Token encontrado: '").append(tokenEncontrado).append("'\n");
+
+    if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
+        sb.append("Era esperado: ");
+        boolean firstSeq = true;
+        for (int[] seq : e.expectedTokenSequences) {
+            if (!firstSeq) sb.append(" ou ");
+            for (int i = 0; i < seq.length; i++) {
+                if (i > 0) sb.append(" ");
+                sb.append("'").append(obterTokenPortugues(seq[i])).append("'");
+            }
+            firstSeq = false;
+        }
+        sb.append("\n");
+    }
+
+    System.out.print(sb.toString());
+  }
+
+  static final public void main() throws ParseException {/*@bgen(jjtree) main */
   SimpleNode jjtn000 = new SimpleNode(JJTMAIN);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000); RecoverySet g = Follow.main;
+  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.main;
     try {
       try {
         jj_consume_token(INICIOPROG);
@@ -359,7 +412,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void bloco() throws ParseException, ParseEOFException {/*@bgen(jjtree) bloco */
+  static final public void bloco() throws ParseException {/*@bgen(jjtree) bloco */
   SimpleNode jjtn000 = new SimpleNode(JJTBLOCO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.bloco;
@@ -440,8 +493,7 @@ if (jjtc000) {
     }
 }
 
-/* ========== COMANDO REFATORADO ========== */
-  static final public void comando() throws ParseException, ParseEOFException {/*@bgen(jjtree) comando */
+  static final public void comando() throws ParseException {/*@bgen(jjtree) comando */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.comando;
@@ -514,8 +566,7 @@ if (jjtc000) {
     }
 }
 
-/* ===== FATORAÇÃO PARA COMANDOS COM IDENTIFICADOR ===== */
-  static final public void comandoIdentificador() throws ParseException, ParseEOFException {/*@bgen(jjtree) comandoIdentificador */
+  static final public void comandoIdentificador() throws ParseException {/*@bgen(jjtree) comandoIdentificador */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDOIDENTIFICADOR);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.comandoIdentificador;
@@ -547,7 +598,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void comandoIdentificadorSufixo() throws ParseException, ParseEOFException {/*@bgen(jjtree) comandoIdentificadorSufixo */
+  static final public void comandoIdentificadorSufixo() throws ParseException {/*@bgen(jjtree) comandoIdentificadorSufixo */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDOIDENTIFICADORSUFIXO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.comandoIdentificadorSufixo;
@@ -675,7 +726,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void sufixoExpressao() throws ParseException, ParseEOFException {/*@bgen(jjtree) sufixoExpressao */
+  static final public void sufixoExpressao() throws ParseException {/*@bgen(jjtree) sufixoExpressao */
   SimpleNode jjtn000 = new SimpleNode(JJTSUFIXOEXPRESSAO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.sufixoExpressao;
@@ -734,9 +785,7 @@ if (jjtc000) {
     }
 }
 
-/* ===================================================== */
-  static final public 
-void declaraVariavel() throws ParseException, ParseEOFException {/*@bgen(jjtree) declaraVariavel */
+  static final public void declaraVariavel() throws ParseException {/*@bgen(jjtree) declaraVariavel */
   SimpleNode jjtn000 = new SimpleNode(JJTDECLARAVARIAVEL);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.declaraVariavel;
@@ -779,7 +828,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void tipoDado() throws ParseException, ParseEOFException {/*@bgen(jjtree) tipoDado */
+  static final public void tipoDado() throws ParseException {/*@bgen(jjtree) tipoDado */
   SimpleNode jjtn000 = new SimpleNode(JJTTIPODADO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.tipoDado;
@@ -839,7 +888,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void ListaIdentificadores() throws ParseException, ParseEOFException {/*@bgen(jjtree) ListaIdentificadores */
+  static final public void ListaIdentificadores() throws ParseException {/*@bgen(jjtree) ListaIdentificadores */
   SimpleNode jjtn000 = new SimpleNode(JJTLISTAIDENTIFICADORES);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.listaIdentificadores;
@@ -870,7 +919,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void ListaExpressoes() throws ParseException, ParseEOFException {/*@bgen(jjtree) ListaExpressoes */
+  static final public void ListaExpressoes() throws ParseException {/*@bgen(jjtree) ListaExpressoes */
   SimpleNode jjtn000 = new SimpleNode(JJTLISTAEXPRESSOES);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.listaExpressoes;
@@ -915,7 +964,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void Expressao() throws ParseException, ParseEOFException {/*@bgen(jjtree) Expressao */
+  static final public void Expressao() throws ParseException {/*@bgen(jjtree) Expressao */
   SimpleNode jjtn000 = new SimpleNode(JJTEXPRESSAO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao;
@@ -974,7 +1023,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void fator() throws ParseException, ParseEOFException {/*@bgen(jjtree) fator */
+  static final public void fator() throws ParseException {/*@bgen(jjtree) fator */
   SimpleNode jjtn000 = new SimpleNode(JJTFATOR);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.fator;
@@ -1033,8 +1082,7 @@ if (jjtc000) {
     }
 }
 
-/* ========== TERMO REFATORADO ========== */
-  static final public void termo() throws ParseException, ParseEOFException {/*@bgen(jjtree) termo */
+  static final public void termo() throws ParseException {/*@bgen(jjtree) termo */
   SimpleNode jjtn000 = new SimpleNode(JJTTERMO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.termo;
@@ -1120,7 +1168,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void termoIdentificadorSufixo() throws ParseException, ParseEOFException {/*@bgen(jjtree) termoIdentificadorSufixo */
+  static final public void termoIdentificadorSufixo() throws ParseException {/*@bgen(jjtree) termoIdentificadorSufixo */
   SimpleNode jjtn000 = new SimpleNode(JJTTERMOIDENTIFICADORSUFIXO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.termoIdentificadorSufixo;
@@ -1207,12 +1255,10 @@ if (jjtc000) {
     }
 }
 
-/* ===================================================== */
-  static final public 
-void operadorLogico() throws ParseException, ParseEOFException {/*@bgen(jjtree) operadorLogico */
+  static final public void operadorLogico() throws ParseException {/*@bgen(jjtree) operadorLogico */
   SimpleNode jjtn000 = new SimpleNode(JJTOPERADORLOGICO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao; /* Usa o mesmo de expressão pois conecta expressões */
+  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1263,7 +1309,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void expressaoLogica() throws ParseException, ParseEOFException {/*@bgen(jjtree) expressaoLogica */
+  static final public void expressaoLogica() throws ParseException {/*@bgen(jjtree) expressaoLogica */
   SimpleNode jjtn000 = new SimpleNode(JJTEXPRESSAOLOGICA);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao;
@@ -1296,7 +1342,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void expressaoCondicional() throws ParseException, ParseEOFException {/*@bgen(jjtree) expressaoCondicional */
+  static final public void expressaoCondicional() throws ParseException {/*@bgen(jjtree) expressaoCondicional */
   SimpleNode jjtn000 = new SimpleNode(JJTEXPRESSAOCONDICIONAL);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressaoCondicional;
@@ -1352,7 +1398,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void condicao() throws ParseException, ParseEOFException {/*@bgen(jjtree) condicao */
+  static final public void condicao() throws ParseException {/*@bgen(jjtree) condicao */
   SimpleNode jjtn000 = new SimpleNode(JJTCONDICAO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.condicao;
@@ -1389,7 +1435,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void print() throws ParseException, ParseEOFException {/*@bgen(jjtree) print */
+  static final public void print() throws ParseException {/*@bgen(jjtree) print */
   SimpleNode jjtn000 = new SimpleNode(JJTPRINT);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.print;
@@ -1422,7 +1468,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void scan() throws ParseException, ParseEOFException {/*@bgen(jjtree) scan */
+  static final public void scan() throws ParseException {/*@bgen(jjtree) scan */
   SimpleNode jjtn000 = new SimpleNode(JJTSCAN);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.scan;
@@ -1441,7 +1487,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void whileLoop() throws ParseException, ParseEOFException {/*@bgen(jjtree) whileLoop */
+  static final public void whileLoop() throws ParseException {/*@bgen(jjtree) whileLoop */
   SimpleNode jjtn000 = new SimpleNode(JJTWHILELOOP);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.whileLoop;
@@ -1478,7 +1524,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void forLoop() throws ParseException, ParseEOFException {/*@bgen(jjtree) forLoop */
+  static final public void forLoop() throws ParseException {/*@bgen(jjtree) forLoop */
   SimpleNode jjtn000 = new SimpleNode(JJTFORLOOP);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.forLoop;
@@ -1519,7 +1565,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void atribuicaoFor() throws ParseException, ParseEOFException {/*@bgen(jjtree) atribuicaoFor */
+  static final public void atribuicaoFor() throws ParseException {/*@bgen(jjtree) atribuicaoFor */
   SimpleNode jjtn000 = new SimpleNode(JJTATRIBUICAOFOR);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.atribuicaoFor;
@@ -1566,7 +1612,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void declaraFuncao() throws ParseException, ParseEOFException {/*@bgen(jjtree) declaraFuncao */
+  static final public void declaraFuncao() throws ParseException {/*@bgen(jjtree) declaraFuncao */
   SimpleNode jjtn000 = new SimpleNode(JJTDECLARAFUNCAO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.declaraFuncao;
@@ -1631,7 +1677,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void listaParametros() throws ParseException, ParseEOFException {/*@bgen(jjtree) listaParametros */
+  static final public void listaParametros() throws ParseException {/*@bgen(jjtree) listaParametros */
   SimpleNode jjtn000 = new SimpleNode(JJTLISTAPARAMETROS);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.listaParametros;
@@ -1676,7 +1722,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void parametro() throws ParseException, ParseEOFException {/*@bgen(jjtree) parametro */
+  static final public void parametro() throws ParseException {/*@bgen(jjtree) parametro */
   SimpleNode jjtn000 = new SimpleNode(JJTPARAMETRO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.parametro;
@@ -1708,7 +1754,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void retorno() throws ParseException, ParseEOFException {/*@bgen(jjtree) retorno */
+  static final public void retorno() throws ParseException {/*@bgen(jjtree) retorno */
   SimpleNode jjtn000 = new SimpleNode(JJTRETORNO);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.retorno;
@@ -1759,7 +1805,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void tipoLista() throws ParseException, ParseEOFException {/*@bgen(jjtree) tipoLista */
+  static final public void tipoLista() throws ParseException {/*@bgen(jjtree) tipoLista */
   SimpleNode jjtn000 = new SimpleNode(JJTTIPOLISTA);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.tipoLista;
@@ -1798,7 +1844,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void inicializacaoLista() throws ParseException, ParseEOFException {/*@bgen(jjtree) inicializacaoLista */
+  static final public void inicializacaoLista() throws ParseException {/*@bgen(jjtree) inicializacaoLista */
   SimpleNode jjtn000 = new SimpleNode(JJTINICIALIZACAOLISTA);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.inicializacaoLista;
@@ -1849,7 +1895,7 @@ if (jjtc000) {
     }
 }
 
-  static final public void tipoPilha() throws ParseException, ParseEOFException {/*@bgen(jjtree) tipoPilha */
+  static final public void tipoPilha() throws ParseException {/*@bgen(jjtree) tipoPilha */
   SimpleNode jjtn000 = new SimpleNode(JJTTIPOPILHA);
   boolean jjtc000 = true;
   jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.tipoPilha;
