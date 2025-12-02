@@ -248,18 +248,33 @@ public class CompilerRestServer {
     }
     
     private static String extractCode(String json) {
-        try {
-            int start = json.indexOf("\"code\":\"") + 8;
-            int end = json.lastIndexOf("\"");
-            if (start > 7 && end > start) {
-                String code = json.substring(start, end);
-                return code.replace("\\n", "\n").replace("\\t", "\t");
+    try {
+        // Procura por "code": e pega tudo até a próxima aspas não escapada
+        int codeIndex = json.indexOf("\"code\":");
+        if (codeIndex == -1) return "";
+        
+        // Encontra a abertura da string após "code":
+        int valueStart = json.indexOf("\"", codeIndex + 7);
+        if (valueStart == -1) return "";
+        
+        // Procura pelo final da string (aspas não escapada)
+        int valueEnd = valueStart + 1;
+        while (valueEnd < json.length()) {
+            if (json.charAt(valueEnd) == '\"' && json.charAt(valueEnd - 1) != '\\') {
+                break;
             }
-        } catch (Exception e) {
-            System.err.println("Erro ao extrair codigo: " + e.getMessage());
+            valueEnd++;
         }
-        return "";
+        
+        if (valueEnd >= json.length()) return "";
+        
+        String code = json.substring(valueStart + 1, valueEnd);
+        return code.replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\");
+    } catch (Exception e) {
+        System.err.println("Erro ao extrair codigo: " + e.getMessage());
     }
+    return "";
+}
     
     private static String escapeJson(String text) {
         if (text == null) return "";
