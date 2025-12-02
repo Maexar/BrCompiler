@@ -80,6 +80,49 @@ public class CompilerRestServer {
             exchange.close();
         });
         
+     // Endpoint mínimo para retornar a árvore sintática em JSON
+        server.createContext("/api/ast", exchange -> {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+                return;
+            }
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String body = new String(exchange.getRequestBody().readAllBytes(), 
+                                            StandardCharsets.UTF_8);
+                    String code = extractCode(body);
+
+                    System.out.println("[DEBUG] Gerando AST para código recebido");
+                    String astJson = AstGenerator.generateAst(code);
+
+                    String result = "{\"success\":true,\"ast\":" + astJson + "}";
+
+                    exchange.getResponseHeaders().set("Content-Type", "application/json");
+                    exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                    exchange.sendResponseHeaders(200, result.getBytes().length);
+                    exchange.getResponseBody().write(result.getBytes());
+                    exchange.close();
+                } catch (Exception e) {
+                    try {
+                        String response = "{\"success\":false,\"error\":\"" + escapeJson(e.getMessage()) + "\"}";
+                        exchange.getResponseHeaders().set("Content-Type", "application/json");
+                        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+                        exchange.sendResponseHeaders(500, response.getBytes().length);
+                        exchange.getResponseBody().write(response.getBytes());
+                        exchange.close();
+                    } catch (Exception ignored) {}
+                }
+            } else {
+                exchange.sendResponseHeaders(405, -1);
+                exchange.close();
+            }
+        });
+        
         server.setExecutor(null);
         server.start();
         
