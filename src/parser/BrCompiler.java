@@ -12,7 +12,7 @@ import recovery.ErrorManager;
 import recovery.DelimiterBalancer;
 
 public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCompilerConstants {/*@bgen(jjtree)*/
-  protected static JJTBrCompilerState jjtree = new JJTBrCompilerState();private static boolean parserInitialized = false;
+  protected static JJTBrCompilerState jjtree = new JJTBrCompilerState();public static boolean parserInitialized = false;
   static DelimiterBalancer delimiterBalancer = new DelimiterBalancer();
   static DelimiterBalancer.UnbalancedDelimiterException balanceException = null;
 
