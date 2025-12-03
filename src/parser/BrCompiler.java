@@ -10,11 +10,20 @@ import recovery.ParseEOFException;
 import recovery.Follow;
 import recovery.ErrorManager;
 import recovery.DelimiterBalancer;
+// Imports para Analise Semantica
+import semantic.AnalisadorSemantico;
+import semantic.TabelaSimbolos;
+import semantic.ErroSemantico;
+import semantic.TipoSemantico;
+import semantic.Simbolo;
 
 public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCompilerConstants {/*@bgen(jjtree)*/
-  protected static JJTBrCompilerState jjtree = new JJTBrCompilerState();public static boolean parserInitialized = false;
+  protected static JJTBrCompilerState jjtree = new JJTBrCompilerState();static boolean parserInitialized = false;
   static DelimiterBalancer delimiterBalancer = new DelimiterBalancer();
   static DelimiterBalancer.UnbalancedDelimiterException balanceException = null;
+
+  // Analisador Semantico
+  static AnalisadorSemantico analisadorSemantico = new AnalisadorSemantico();
 
   public static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
@@ -222,26 +231,31 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCo
             lastError = null;
             delimiterBalancer = new DelimiterBalancer();
             balanceException = null;
+            // Reinicializa o analisador semantico
+            analisadorSemantico = new AnalisadorSemantico();
 
             BrCompiler.ReInit(new StringReader(line));
 
             boolean hasBalanceError = false;
             String balanceErrorMsg = null;
+            boolean hasSyntaxError = false;
 
             try {
                 BrCompiler.main();
             } catch (ParseEOFException e) {
                 System.out.println("ERRO FATAL: " + e.getMessage());
                 ErrorManager.addError(new ParseException("EOF inesperado"), "main", null);
+                hasSyntaxError = true;
             } catch (ParseException e) {
                 ErrorManager.addError(e, "main", null);
+                hasSyntaxError = true;
             } finally {
-                // Verifica erros de balanceamento durante tokenização
+                // Verifica erros de balanceamento durante tokenizacao
                 if (balanceException != null) {
                     hasBalanceError = true;
                     balanceErrorMsg = balanceException.getMessage();
                 } else {
-                    // Verifica o balanceamento no final, se não houve erro durante tokenização
+                    // Verifica o balanceamento no final, se nao houve erro durante tokenizacao
                     try {
                         delimiterBalancer.checkBalance();
                     } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
@@ -256,8 +270,44 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCo
                 System.out.println("ERRO DE BALANCEAMENTO: " + balanceErrorMsg);
             }
 
+            // ========== ANALISE SEMANTICA ==========
+            // So executa se nao houver erros sintaticos ou de balanceamento
+            boolean hasSemanticError = false;
+
+            if (!ErrorManager.hasErrors() && !hasBalanceError && !hasSyntaxError) {
+                try {
+                    // Obtem a raiz da AST
+                    SimpleNode raiz = (SimpleNode) jjtree.rootNode();
+
+                    if (raiz != null) {
+                        System.out.println("\n--- Iniciando Analise Semantica ---");
+
+                        // Desativa modo debug para saida mais limpa (opcional)
+                        analisadorSemantico.setDebug(false);
+
+                        // Executa analise semantica
+                        analisadorSemantico.analisar(raiz);
+
+                        // Verifica se houve erros semanticos
+                        if (analisadorSemantico.temErros()) {
+                            hasSemanticError = true;
+                            System.out.println(analisadorSemantico.getRelatorioErros());
+                        }
+
+                        // Exibe tabela de simbolos (pode ser desabilitado em producao)
+                        // System.out.println(analisadorSemantico.getTabelaSimbolos().gerarRelatorio());
+
+                        System.out.println("--- Analise Semantica Concluida ---\n");
+                    }
+                } catch (Exception e) {
+                    System.out.println("ERRO durante analise semantica: " + e.getMessage());
+                    e.printStackTrace();
+                    hasSemanticError = true;
+                }
+            }
+
             // Exibe resultado final
-            if (ErrorManager.hasErrors() || hasBalanceError) {
+            if (ErrorManager.hasErrors() || hasBalanceError || hasSemanticError) {
                 System.out.println("\nNOK.");
                 if (ErrorManager.hasErrors()) {
                     System.out.println(ErrorManager.getErrorReport());
@@ -329,14 +379,14 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCo
         System.out.println("    Ignorando o token: '" + im(tok.kind) + "'");
         ErrorManager.tokenConsumed();
 
-        // Processa delimitadores mesmo durante recuperação para manter balanceamento
+        // Processa delimitadores mesmo durante recuperacao para manter balanceamento
         if (tok.kind == ABREBLOCO || tok.kind == FECHABLOCO ||
             tok.kind == ABRIREXP || tok.kind == FECHAREXP) {
             try {
                 delimiterBalancer.processToken(tok.kind, tok.beginLine, tok.beginColumn);
             } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
-                // Durante recuperação, ignora erros de balanceamento temporários
-                // O balanceamento final será verificado no método main
+                // Durante recuperacao, ignora erros de balanceamento temporarios
+                // O balanceamento final sera verificado no metodo main
             }
         }
 
@@ -389,10 +439,41 @@ public class BrCompiler/*@bgen(jjtree)*/implements BrCompilerTreeConstants, BrCo
     System.out.print(sb.toString());
   }
 
+  // ========== METODOS AUXILIARES PARA ANALISE SEMANTICA ==========
+
+  /**
+   * Obtem o analisador semantico atual
+   */
+  public static AnalisadorSemantico getAnalisadorSemantico() {
+    return analisadorSemantico;
+  }
+
+  /**
+   * Obtem a tabela de simbolos atual
+   */
+  public static TabelaSimbolos getTabelaSimbolos() {
+    return analisadorSemantico.getTabelaSimbolos();
+  }
+
+  /**
+   * Verifica se ha erros semanticos
+   */
+  public static boolean temErrosSemanticos() {
+    return analisadorSemantico.temErros();
+  }
+
+  /**
+   * Obtem relatorio de erros semanticos
+   */
+  public static String getRelatorioSemantico() {
+    return analisadorSemantico.getRelatorioErros();
+  }
+
   static final public void main() throws ParseException {/*@bgen(jjtree) main */
   SimpleNode jjtn000 = new SimpleNode(JJTMAIN);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.main;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.main;
     try {
       try {
         jj_consume_token(INICIOPROG);
@@ -419,6 +500,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -426,7 +508,8 @@ if (jjtc000) {
   static final public void bloco() throws ParseException {/*@bgen(jjtree) bloco */
   SimpleNode jjtn000 = new SimpleNode(JJTBLOCO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.bloco;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.bloco;
     try {
       label_1:
       while (true) {
@@ -500,6 +583,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -507,7 +591,8 @@ if (jjtc000) {
   static final public void comando() throws ParseException {/*@bgen(jjtree) comando */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.comando;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.comando;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -573,6 +658,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
        jjtree.closeNodeScope(jjtn000, true);
+       jjtn000.jjtSetLastToken(getToken(0));
      }
     }
 }
@@ -580,7 +666,8 @@ if (jjtc000) {
   static final public void comandoIdentificador() throws ParseException {/*@bgen(jjtree) comandoIdentificador */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDOIDENTIFICADOR);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.comandoIdentificador;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.comandoIdentificador;
     try {
       try {
         jj_consume_token(IDENTIFICADOR);
@@ -605,6 +692,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -612,7 +700,8 @@ if (jjtc000) {
   static final public void comandoIdentificadorSufixo() throws ParseException {/*@bgen(jjtree) comandoIdentificadorSufixo */
   SimpleNode jjtn000 = new SimpleNode(JJTCOMANDOIDENTIFICADORSUFIXO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.comandoIdentificadorSufixo;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.comandoIdentificadorSufixo;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -733,6 +822,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -740,7 +830,8 @@ if (jjtc000) {
   static final public void sufixoExpressao() throws ParseException {/*@bgen(jjtree) sufixoExpressao */
   SimpleNode jjtn000 = new SimpleNode(JJTSUFIXOEXPRESSAO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.sufixoExpressao;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.sufixoExpressao;
     try {
       try {
         label_2:
@@ -792,6 +883,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -799,7 +891,8 @@ if (jjtc000) {
   static final public void declaraVariavel() throws ParseException {/*@bgen(jjtree) declaraVariavel */
   SimpleNode jjtn000 = new SimpleNode(JJTDECLARAVARIAVEL);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.declaraVariavel;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.declaraVariavel;
     try {
       try {
         tipoDado();
@@ -835,6 +928,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -842,7 +936,8 @@ if (jjtc000) {
   static final public void tipoDado() throws ParseException {/*@bgen(jjtree) tipoDado */
   SimpleNode jjtn000 = new SimpleNode(JJTTIPODADO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.tipoDado;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.tipoDado;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -895,6 +990,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -902,7 +998,8 @@ if (jjtc000) {
   static final public void ListaIdentificadores() throws ParseException {/*@bgen(jjtree) ListaIdentificadores */
   SimpleNode jjtn000 = new SimpleNode(JJTLISTAIDENTIFICADORES);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.listaIdentificadores;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.listaIdentificadores;
     try {
       try {
         jj_consume_token(IDENTIFICADOR);
@@ -926,6 +1023,7 @@ consumeUntil(g, e, "ListaIdentificadores");
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -933,7 +1031,8 @@ if (jjtc000) {
   static final public void ListaExpressoes() throws ParseException {/*@bgen(jjtree) ListaExpressoes */
   SimpleNode jjtn000 = new SimpleNode(JJTLISTAEXPRESSOES);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.listaExpressoes;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.listaExpressoes;
     try {
       try {
         Expressao();
@@ -971,6 +1070,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -978,7 +1078,8 @@ if (jjtc000) {
   static final public void Expressao() throws ParseException {/*@bgen(jjtree) Expressao */
   SimpleNode jjtn000 = new SimpleNode(JJTEXPRESSAO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.expressao;
     try {
       try {
         fator();
@@ -1030,6 +1131,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -1037,7 +1139,8 @@ if (jjtc000) {
   static final public void fator() throws ParseException {/*@bgen(jjtree) fator */
   SimpleNode jjtn000 = new SimpleNode(JJTFATOR);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.fator;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.fator;
     try {
       try {
         termo();
@@ -1089,6 +1192,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
        jjtree.closeNodeScope(jjtn000, true);
+       jjtn000.jjtSetLastToken(getToken(0));
      }
     }
 }
@@ -1096,7 +1200,8 @@ if (jjtc000) {
   static final public void termo() throws ParseException {/*@bgen(jjtree) termo */
   SimpleNode jjtn000 = new SimpleNode(JJTTERMO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.termo;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.termo;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1175,6 +1280,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1182,7 +1288,8 @@ if (jjtc000) {
   static final public void termoIdentificadorSufixo() throws ParseException {/*@bgen(jjtree) termoIdentificadorSufixo */
   SimpleNode jjtn000 = new SimpleNode(JJTTERMOIDENTIFICADORSUFIXO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.termoIdentificadorSufixo;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.termoIdentificadorSufixo;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1262,6 +1369,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1269,7 +1377,8 @@ if (jjtc000) {
   static final public void operadorLogico() throws ParseException {/*@bgen(jjtree) operadorLogico */
   SimpleNode jjtn000 = new SimpleNode(JJTOPERADORLOGICO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.expressao;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1316,6 +1425,7 @@ consumeUntil(g, e, "operadorLogico");
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1323,7 +1433,8 @@ if (jjtc000) {
   static final public void expressaoLogica() throws ParseException {/*@bgen(jjtree) expressaoLogica */
   SimpleNode jjtn000 = new SimpleNode(JJTEXPRESSAOLOGICA);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressao;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.expressao;
     try {
       try {
         Expressao();
@@ -1349,6 +1460,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1356,7 +1468,8 @@ if (jjtc000) {
   static final public void expressaoCondicional() throws ParseException {/*@bgen(jjtree) expressaoCondicional */
   SimpleNode jjtn000 = new SimpleNode(JJTEXPRESSAOCONDICIONAL);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.expressaoCondicional;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.expressaoCondicional;
     try {
       try {
         condicao();
@@ -1405,6 +1518,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1412,7 +1526,8 @@ if (jjtc000) {
   static final public void condicao() throws ParseException {/*@bgen(jjtree) condicao */
   SimpleNode jjtn000 = new SimpleNode(JJTCONDICAO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.condicao;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.condicao;
     try {
       try {
         jj_consume_token(CONDICIONAL);
@@ -1442,6 +1557,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1449,7 +1565,8 @@ if (jjtc000) {
   static final public void print() throws ParseException {/*@bgen(jjtree) print */
   SimpleNode jjtn000 = new SimpleNode(JJTPRINT);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.print;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.print;
     try {
       try {
         jj_consume_token(PRINT);
@@ -1475,6 +1592,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -1482,7 +1600,8 @@ if (jjtc000) {
   static final public void scan() throws ParseException {/*@bgen(jjtree) scan */
   SimpleNode jjtn000 = new SimpleNode(JJTSCAN);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.scan;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.scan;
     try {
       try {
         jj_consume_token(SCAN);
@@ -1494,6 +1613,7 @@ consumeUntil(g, e, "scan");
     } finally {
 if (jjtc000) {
        jjtree.closeNodeScope(jjtn000, true);
+       jjtn000.jjtSetLastToken(getToken(0));
      }
     }
 }
@@ -1501,7 +1621,8 @@ if (jjtc000) {
   static final public void whileLoop() throws ParseException {/*@bgen(jjtree) whileLoop */
   SimpleNode jjtn000 = new SimpleNode(JJTWHILELOOP);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.whileLoop;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.whileLoop;
     try {
       try {
         jj_consume_token(WHILE);
@@ -1531,6 +1652,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -1538,7 +1660,8 @@ if (jjtc000) {
   static final public void forLoop() throws ParseException {/*@bgen(jjtree) forLoop */
   SimpleNode jjtn000 = new SimpleNode(JJTFORLOOP);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.forLoop;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.forLoop;
     try {
       try {
         jj_consume_token(FOR);
@@ -1572,6 +1695,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1579,7 +1703,8 @@ if (jjtc000) {
   static final public void atribuicaoFor() throws ParseException {/*@bgen(jjtree) atribuicaoFor */
   SimpleNode jjtn000 = new SimpleNode(JJTATRIBUICAOFOR);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.atribuicaoFor;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.atribuicaoFor;
     try {
       try {
         switch ((jj_ntk==-1)?jj_ntk_f():jj_ntk) {
@@ -1619,6 +1744,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1626,7 +1752,8 @@ if (jjtc000) {
   static final public void declaraFuncao() throws ParseException {/*@bgen(jjtree) declaraFuncao */
   SimpleNode jjtn000 = new SimpleNode(JJTDECLARAFUNCAO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.declaraFuncao;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.declaraFuncao;
     try {
       try {
         jj_consume_token(FUNCAO);
@@ -1684,6 +1811,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
      jjtree.closeNodeScope(jjtn000, true);
+     jjtn000.jjtSetLastToken(getToken(0));
    }
     }
 }
@@ -1691,7 +1819,8 @@ if (jjtc000) {
   static final public void listaParametros() throws ParseException {/*@bgen(jjtree) listaParametros */
   SimpleNode jjtn000 = new SimpleNode(JJTLISTAPARAMETROS);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.listaParametros;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.listaParametros;
     try {
       try {
         parametro();
@@ -1729,6 +1858,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1736,7 +1866,8 @@ if (jjtc000) {
   static final public void parametro() throws ParseException {/*@bgen(jjtree) parametro */
   SimpleNode jjtn000 = new SimpleNode(JJTPARAMETRO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.parametro;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.parametro;
     try {
       try {
         tipoDado();
@@ -1761,6 +1892,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1768,7 +1900,8 @@ if (jjtc000) {
   static final public void retorno() throws ParseException {/*@bgen(jjtree) retorno */
   SimpleNode jjtn000 = new SimpleNode(JJTRETORNO);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.retorno;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.retorno;
     try {
       try {
         jj_consume_token(RETURN);
@@ -1812,6 +1945,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
         jjtree.closeNodeScope(jjtn000, true);
+        jjtn000.jjtSetLastToken(getToken(0));
       }
     }
 }
@@ -1819,7 +1953,8 @@ if (jjtc000) {
   static final public void tipoLista() throws ParseException {/*@bgen(jjtree) tipoLista */
   SimpleNode jjtn000 = new SimpleNode(JJTTIPOLISTA);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.tipoLista;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.tipoLista;
     try {
       try {
         jj_consume_token(LISTA);
@@ -1851,6 +1986,7 @@ consumeUntil(g, e, "tipoLista");
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1858,7 +1994,8 @@ if (jjtc000) {
   static final public void inicializacaoLista() throws ParseException {/*@bgen(jjtree) inicializacaoLista */
   SimpleNode jjtn000 = new SimpleNode(JJTINICIALIZACAOLISTA);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.inicializacaoLista;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.inicializacaoLista;
     try {
       try {
         jj_consume_token(ABRIREXP);
@@ -1902,6 +2039,7 @@ if (jjtc000) {
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }
@@ -1909,7 +2047,8 @@ if (jjtc000) {
   static final public void tipoPilha() throws ParseException {/*@bgen(jjtree) tipoPilha */
   SimpleNode jjtn000 = new SimpleNode(JJTTIPOPILHA);
   boolean jjtc000 = true;
-  jjtree.openNodeScope(jjtn000);RecoverySet g = Follow.tipoPilha;
+  jjtree.openNodeScope(jjtn000);
+  jjtn000.jjtSetFirstToken(getToken(1));RecoverySet g = Follow.tipoPilha;
     try {
       try {
         jj_consume_token(PILHA);
@@ -1941,6 +2080,7 @@ consumeUntil(g, e, "tipoPilha");
     } finally {
 if (jjtc000) {
       jjtree.closeNodeScope(jjtn000, true);
+      jjtn000.jjtSetLastToken(getToken(0));
     }
     }
 }

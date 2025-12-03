@@ -3,6 +3,10 @@ package parser;
 import com.sun.net.httpserver.*;
 import recovery.ErrorManager;
 import recovery.DelimiterBalancer;
+import semantic.AnalisadorSemantico;
+import semantic.TabelaSimbolos;
+import semantic.ErroSemantico;
+import semantic.Simbolo;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -12,12 +16,15 @@ import java.util.ArrayList;
 public class CompilerRestServer {
     private static final int PORT = 8085;
     
-    // ===== LOCK ÚNICO PARA TODAS AS OPERAÇÕES =====
+    // ===== LOCK UNICO PARA TODAS AS OPERACOES =====
     private static final Object COMPILER_LOCK = new Object();
     
     // ===== ESTADO DO COMPILADOR =====
     private static volatile boolean compilerInitialized = false;
     private static BrCompiler compiler = null;
+    
+    // ===== ANALISADOR SEMANTICO =====
+    private static AnalisadorSemantico analisadorSemantico = new AnalisadorSemantico();
     
     public static void main(String[] args) throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress("localhost", PORT), 0);
@@ -44,7 +51,7 @@ public class CompilerRestServer {
                 return;
             }
             
-            String response = "{\"status\":\"ok\",\"compiler\":\"BrCompiler\",\"version\":\"1.0\"}";
+            String response = "{\"status\":\"ok\",\"compiler\":\"BrCompiler\",\"version\":\"2.0-semantic\"}";
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
             exchange.sendResponseHeaders(200, response.getBytes().length);
@@ -80,15 +87,31 @@ public class CompilerRestServer {
             }
         });
         
+        // ===== NOVO ENDPOINT: TABELA DE SIMBOLOS =====
+        server.createContext("/api/symbols", exchange -> {
+            if ("OPTIONS".equals(exchange.getRequestMethod())) {
+                handleCORS(exchange);
+                return;
+            }
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                handleSymbols(exchange);
+            } else {
+                exchange.sendResponseHeaders(405, -1);
+                exchange.close();
+            }
+        });
+        
         server.start();
         
         System.out.println("\n");
-        System.out.println("SERVIDOR COMPILADOR INICIADO");
+        System.out.println("SERVIDOR COMPILADOR INICIADO (COM ANALISE SEMANTICA)");
         System.out.println("\nEndpoints disponiveis:");
-        System.out.println("   POST http://localhost:" + PORT + "/api/compile");
-        System.out.println("   POST http://localhost:" + PORT + "/api/ast");
-        System.out.println("   POST http://localhost:" + PORT + "/api/tokens");
-        System.out.println("   GET  http://localhost:" + PORT + "/api/health");
+        System.out.println("   POST http://localhost:" + PORT + "/api/compile   - Compila codigo (lexico + sintatico + semantico)");
+        System.out.println("   POST http://localhost:" + PORT + "/api/ast       - Gera arvore sintatica");
+        System.out.println("   POST http://localhost:" + PORT + "/api/tokens    - Extrai tokens");
+        System.out.println("   POST http://localhost:" + PORT + "/api/symbols   - Retorna tabela de simbolos");
+        System.out.println("   GET  http://localhost:" + PORT + "/api/health    - Verifica status");
         System.out.println("\nMANTENHA ESTE TERMINAL ABERTO ENQUANTO DESENVOLVE\n");
     }
     
@@ -157,6 +180,25 @@ public class CompilerRestServer {
         }
     }
     
+    // ===== NOVO HANDLER: TABELA DE SIMBOLOS =====
+    private static void handleSymbols(HttpExchange exchange) {
+        try {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            String code = extractCode(body);
+            
+            System.out.println("[DEBUG] Extraindo tabela de simbolos");
+            
+            String symbolsJson = extractSymbols(code);
+            String result = "{\"success\":true,\"symbols\":" + symbolsJson + "}";
+            
+            sendJsonResponse(exchange, 200, result);
+        } catch (Exception e) {
+            System.out.println("[ERRO] Excecao em /api/symbols: " + e.getMessage());
+            e.printStackTrace();
+            sendErrorResponse(exchange, 500, e.getMessage());
+        }
+    }
+    
     private static void sendJsonResponse(HttpExchange exchange, int statusCode, String json) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
@@ -186,10 +228,15 @@ public class CompilerRestServer {
             try {
                 System.out.println("[COMPILE] Iniciando compilacao");
                 
+                // Limpa estados anteriores
                 ErrorManager.clear();
                 BrCompiler.eof = false;
                 BrCompiler.lastError = null;
                 BrCompiler.delimiterBalancer = new DelimiterBalancer();
+                
+                // Reinicia analisador semantico
+                analisadorSemantico = new AnalisadorSemantico();
+                analisadorSemantico.setDebug(false);
                 
                 java.io.StringReader reader = new java.io.StringReader(code);
                 
@@ -203,33 +250,72 @@ public class CompilerRestServer {
                     compiler.ReInit(reader);
                 }
                 
+                // ===== ANALISE LEXICA E SINTATICA =====
                 compiler.main();
                 
-                List<ErrorManager.SyntaxError> allErrors = new ArrayList<>();
+                List<ErrorManager.SyntaxError> syntaxErrors = new ArrayList<>();
+                List<ErroSemantico> semanticErrors = new ArrayList<>();
                 
+                // Coleta erros sintaticos
                 if (ErrorManager.hasErrors()) {
-                    allErrors.addAll(ErrorManager.getErrors());
+                    syntaxErrors.addAll(ErrorManager.getErrors());
                 }
                 
+                // Verifica balanceamento
+                boolean hasBalanceError = false;
                 try {
                     BrCompiler.delimiterBalancer.checkBalance();
                 } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
                     System.out.println("[DEBUG] Erro de balanceamento detectado");
+                    hasBalanceError = true;
                     ErrorManager.SyntaxError balanceError = new ErrorManager.SyntaxError(
                         "Erro de balanceamento: " + ex.getMessage(),
                         ex.line, ex.column, "balanceamento", "EOF", "fecha-te-sesamo"
                     );
-                    allErrors.add(balanceError);
+                    syntaxErrors.add(balanceError);
                 }
                 
-                if (!allErrors.isEmpty()) {
-                    System.out.println("[DEBUG] Total de " + allErrors.size() + " erro(s) encontrado(s)");
-                    return buildMultipleErrorsResponse(allErrors);
+                // ===== ANALISE SEMANTICA =====
+                // So executa se nao houver erros sintaticos
+                if (syntaxErrors.isEmpty() && !hasBalanceError) {
+                    try {
+                        SimpleNode raiz = (SimpleNode) BrCompiler.jjtree.rootNode();
+                        
+                        if (raiz != null) {
+                            System.out.println("[SEMANTIC] Iniciando analise semantica");
+                            analisadorSemantico.analisar(raiz);
+                            
+                            if (analisadorSemantico.temErros()) {
+                                semanticErrors.addAll(analisadorSemantico.getErros());
+                                System.out.println("[SEMANTIC] " + semanticErrors.size() + " erro(s) semantico(s) encontrado(s)");
+                            } else {
+                                System.out.println("[SEMANTIC] Analise semantica concluida sem erros");
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.out.println("[SEMANTIC] Erro durante analise semantica: " + e.getMessage());
+                        e.printStackTrace();
+                    }
                 }
                 
+                // ===== MONTA RESPOSTA =====
+                if (!syntaxErrors.isEmpty() || !semanticErrors.isEmpty()) {
+                    System.out.println("[DEBUG] Total: " + syntaxErrors.size() + " erro(s) sintatico(s), " + 
+                                      semanticErrors.size() + " erro(s) semantico(s)");
+                    return buildFullErrorsResponse(syntaxErrors, semanticErrors);
+                }
+                
+                // Sucesso!
                 System.out.println("[COMPILE] Compilacao bem-sucedida!");
-                return "{\"success\":true,\"message\":\"Codigo compilado com sucesso\",\"lines\":" + 
-                       countLines(code) + "}";
+                
+                // Retorna tambem informacoes da tabela de simbolos
+                TabelaSimbolos tabela = analisadorSemantico.getTabelaSimbolos();
+                int numVariaveis = tabela.getVariaveis().size();
+                int numFuncoes = tabela.getFuncoes().size();
+                
+                return "{\"success\":true,\"message\":\"Codigo compilado com sucesso\"," +
+                       "\"lines\":" + countLines(code) + "," +
+                       "\"symbols\":{\"variables\":" + numVariaveis + ",\"functions\":" + numFuncoes + "}}";
                 
             } catch (ParseException e) {
                 System.out.println("[DEBUG] ParseException capturada");
@@ -244,7 +330,7 @@ public class CompilerRestServer {
                     allErrors.add(parseError);
                 }
                 
-                return buildMultipleErrorsResponse(allErrors);
+                return buildFullErrorsResponse(allErrors, new ArrayList<>());
                 
             } catch (TokenMgrError e) {
                 System.out.println("[DEBUG] TokenMgrError capturado");
@@ -253,7 +339,7 @@ public class CompilerRestServer {
                 
                 List<ErrorManager.SyntaxError> allErrors = new ArrayList<>();
                 allErrors.add(lexError);
-                return buildMultipleErrorsResponse(allErrors);
+                return buildFullErrorsResponse(allErrors, new ArrayList<>());
                 
             } catch (Exception e) {
                 System.out.println("[DEBUG] Exception generica capturada");
@@ -262,6 +348,101 @@ public class CompilerRestServer {
                 return "{\"success\":false,\"error\":\"" + escapeJson(errorMsg) + "\"}";
             }
         }
+    }
+    
+    // ===== EXTRAI TABELA DE SIMBOLOS =====
+    private static String extractSymbols(String code) {
+        synchronized (COMPILER_LOCK) {
+            if (code == null || code.trim().isEmpty()) {
+                return "{\"variables\":[],\"functions\":[]}";
+            }
+            
+            try {
+                // Primeiro compila para popular a tabela de simbolos
+                ErrorManager.clear();
+                BrCompiler.eof = false;
+                BrCompiler.lastError = null;
+                BrCompiler.delimiterBalancer = new DelimiterBalancer();
+                analisadorSemantico = new AnalisadorSemantico();
+                analisadorSemantico.setDebug(false);
+                
+                java.io.StringReader reader = new java.io.StringReader(code);
+                
+                if (!compilerInitialized || compiler == null) {
+                    compiler = new BrCompiler(reader);
+                    compilerInitialized = true;
+                    BrCompiler.parserInitialized = true;
+                } else {
+                    compiler.ReInit(reader);
+                }
+                
+                try {
+                    compiler.main();
+                    
+                    // Executa analise semantica
+                    SimpleNode raiz = (SimpleNode) BrCompiler.jjtree.rootNode();
+                    if (raiz != null) {
+                        analisadorSemantico.analisar(raiz);
+                    }
+                } catch (Exception e) {
+                    // Ignora erros - queremos os simbolos que foram coletados
+                }
+                
+                // Monta JSON da tabela de simbolos
+                TabelaSimbolos tabela = analisadorSemantico.getTabelaSimbolos();
+                return buildSymbolsJson(tabela);
+                
+            } catch (Exception e) {
+                System.out.println("[ERRO] Erro ao extrair simbolos: " + e.getMessage());
+                return "{\"variables\":[],\"functions\":[]}";
+            }
+        }
+    }
+    
+    // ===== MONTA JSON DA TABELA DE SIMBOLOS =====
+    private static String buildSymbolsJson(TabelaSimbolos tabela) {
+        StringBuilder json = new StringBuilder();
+        json.append("{");
+        
+        // Variaveis
+        json.append("\"variables\":[");
+        List<Simbolo> variaveis = tabela.getVariaveis();
+        boolean first = true;
+        for (Simbolo v : variaveis) {
+            if (!first) json.append(",");
+            json.append("{");
+            json.append("\"name\":\"").append(escapeJson(v.getNome())).append("\",");
+            json.append("\"type\":\"").append(escapeJson(v.getTipo().getNomePortugues())).append("\",");
+            json.append("\"scope\":\"").append(escapeJson(v.getEscopo())).append("\",");
+            json.append("\"line\":").append(v.getLinhaDeclaracao()).append(",");
+            json.append("\"initialized\":").append(v.isInicializado()).append(",");
+            json.append("\"used\":").append(v.isUtilizado());
+            json.append("}");
+            first = false;
+        }
+        json.append("],");
+        
+        // Funcoes
+        json.append("\"functions\":[");
+        List<Simbolo> funcoes = tabela.getFuncoes();
+        first = true;
+        for (Simbolo f : funcoes) {
+            if (!first) json.append(",");
+            json.append("{");
+            json.append("\"name\":\"").append(escapeJson(f.getNome())).append("\",");
+            json.append("\"returnType\":\"").append(escapeJson(f.getTipoRetorno().getNomePortugues())).append("\",");
+            json.append("\"scope\":\"").append(escapeJson(f.getEscopo())).append("\",");
+            json.append("\"line\":").append(f.getLinhaDeclaracao()).append(",");
+            json.append("\"paramCount\":").append(f.getNumeroParametros()).append(",");
+            json.append("\"signature\":\"").append(escapeJson(f.getAssinaturaFuncao())).append("\",");
+            json.append("\"used\":").append(f.isUtilizado());
+            json.append("}");
+            first = false;
+        }
+        json.append("]");
+        
+        json.append("}");
+        return json.toString();
     }
     
     private static String extractTokens(String code) {
@@ -373,12 +554,16 @@ public class CompilerRestServer {
         return new ErrorManager.SyntaxError(errorMsg, line, column, context, "", "");
     }
     
-    private static String buildMultipleErrorsResponse(List<ErrorManager.SyntaxError> errors) {
+    // ===== MONTA RESPOSTA COM ERROS SINTATICOS E SEMANTICOS =====
+    private static String buildFullErrorsResponse(List<ErrorManager.SyntaxError> syntaxErrors, 
+                                                   List<ErroSemantico> semanticErrors) {
         StringBuilder json = new StringBuilder();
-        json.append("{\"success\":false,\"errors\":[");
+        json.append("{\"success\":false,");
         
+        // Erros sintaticos
+        json.append("\"syntaxErrors\":[");
         boolean first = true;
-        for (ErrorManager.SyntaxError error : errors) {
+        for (ErrorManager.SyntaxError error : syntaxErrors) {
             if (!first) json.append(",");
             json.append("{");
             json.append("\"message\":\"").append(escapeJson(error.getMessage())).append("\",");
@@ -390,9 +575,64 @@ public class CompilerRestServer {
             json.append("}");
             first = false;
         }
+        json.append("],");
         
-        json.append("]}");
+        // Erros semanticos
+        json.append("\"semanticErrors\":[");
+        first = true;
+        for (ErroSemantico error : semanticErrors) {
+            if (!first) json.append(",");
+            json.append("{");
+            json.append("\"message\":\"").append(escapeJson(error.getMensagem())).append("\",");
+            json.append("\"line\":").append(error.getLinha()).append(",");
+            json.append("\"column\":").append(error.getColuna()).append(",");
+            json.append("\"type\":\"").append(escapeJson(error.getTipo().name())).append("\",");
+            json.append("\"identifier\":\"").append(escapeJson(error.getIdentificador() != null ? error.getIdentificador() : "")).append("\"");
+            json.append("}");
+            first = false;
+        }
+        json.append("],");
+        
+        // Compatibilidade: mantem array "errors" para a IDE existente
+        json.append("\"errors\":[");
+        first = true;
+        
+        // Adiciona erros sintaticos
+        for (ErrorManager.SyntaxError error : syntaxErrors) {
+            if (!first) json.append(",");
+            json.append("{");
+            json.append("\"message\":\"[SINTAXE] ").append(escapeJson(error.getMessage())).append("\",");
+            json.append("\"line\":").append(error.getLine()).append(",");
+            json.append("\"column\":").append(error.getColumn()).append(",");
+            json.append("\"context\":\"").append(escapeJson(error.getContext())).append("\",");
+            json.append("\"foundToken\":\"").append(escapeJson(error.getFoundToken())).append("\",");
+            json.append("\"expectedTokens\":\"").append(escapeJson(error.getExpectedTokens())).append("\"");
+            json.append("}");
+            first = false;
+        }
+        
+        // Adiciona erros semanticos
+        for (ErroSemantico error : semanticErrors) {
+            if (!first) json.append(",");
+            json.append("{");
+            json.append("\"message\":\"[SEMANTICO] ").append(escapeJson(error.getMensagem())).append("\",");
+            json.append("\"line\":").append(error.getLinha()).append(",");
+            json.append("\"column\":").append(error.getColuna()).append(",");
+            json.append("\"context\":\"semantico\",");
+            json.append("\"foundToken\":\"\",");
+            json.append("\"expectedTokens\":\"\"");
+            json.append("}");
+            first = false;
+        }
+        json.append("]");
+        
+        json.append("}");
         return json.toString();
+    }
+    
+    // Mantem compatibilidade com versao anterior
+    private static String buildMultipleErrorsResponse(List<ErrorManager.SyntaxError> errors) {
+        return buildFullErrorsResponse(errors, new ArrayList<>());
     }
     
     private static int countLines(String code) {

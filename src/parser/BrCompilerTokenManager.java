@@ -9,6 +9,12 @@ import recovery.ParseEOFException;
 import recovery.Follow;
 import recovery.ErrorManager;
 import recovery.DelimiterBalancer;
+// Imports para Analise Semantica
+import semantic.AnalisadorSemantico;
+import semantic.TabelaSimbolos;
+import semantic.ErroSemantico;
+import semantic.TipoSemantico;
+import semantic.Simbolo;
 
 /** Token Manager. */
 @SuppressWarnings ("unused")
@@ -20,8 +26,8 @@ public class BrCompilerTokenManager implements BrCompilerConstants {
                 parser.BrCompiler.delimiterBalancer.processToken(t.kind, t.beginLine, t.beginColumn);
             } catch (recovery.DelimiterBalancer.UnbalancedDelimiterException ex) {
                 // Durante o parsing, ignora erros de balanceamento
-                // Eles serão verificados no final pelo checkBalance()
-                // Isso evita falsos positivos durante recuperação de erro
+                // Eles serao verificados no final pelo checkBalance()
+                // Isso evita falsos positivos durante recuperacao de erro
             }
         }
     }

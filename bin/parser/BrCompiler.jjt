@@ -1,11 +1,13 @@
 /**
  * JavaCC template file created by SF JavaCC plugin 1.5.28+ wizard for JavaCC 1.5.0+
- * GRAMÁTICA REFATORADA PARA LL(1) - Eliminação de LOOKAHEADs e Ambiguidades
+ * GRAMATICA REFATORADA PARA LL(1) - Eliminacao de LOOKAHEADs e Ambiguidades
+ * VERSAO COM ANALISE SEMANTICA INTEGRADA
  */
 options
 {
   static = true;
   COMMON_TOKEN_ACTION = true;
+  TRACK_TOKENS = true;  // Habilitado para acessar tokens nos nos da AST
 }
 
 PARSER_BEGIN(BrCompiler)
@@ -19,12 +21,21 @@ import recovery.ParseEOFException;
 import recovery.Follow;
 import recovery.ErrorManager;
 import recovery.DelimiterBalancer;
+// Imports para Analise Semantica
+import semantic.AnalisadorSemantico;
+import semantic.TabelaSimbolos;
+import semantic.ErroSemantico;
+import semantic.TipoSemantico;
+import semantic.Simbolo;
 
 public class BrCompiler
 {
   private static boolean parserInitialized = false;
   static DelimiterBalancer delimiterBalancer = new DelimiterBalancer();
   static DelimiterBalancer.UnbalancedDelimiterException balanceException = null;
+  
+  // Analisador Semantico
+  static AnalisadorSemantico analisadorSemantico = new AnalisadorSemantico();
 
   public static String obterTokenPortugues(int tipoToken) {
     switch(tipoToken) {
@@ -232,26 +243,31 @@ public class BrCompiler
             lastError = null;
             delimiterBalancer = new DelimiterBalancer();
             balanceException = null;
+            // Reinicializa o analisador semantico
+            analisadorSemantico = new AnalisadorSemantico();
             
             BrCompiler.ReInit(new StringReader(line));
             
             boolean hasBalanceError = false;
             String balanceErrorMsg = null;
+            boolean hasSyntaxError = false;
             
             try {
                 BrCompiler.main();
             } catch (ParseEOFException e) {
                 System.out.println("ERRO FATAL: " + e.getMessage());
                 ErrorManager.addError(new ParseException("EOF inesperado"), "main", null);
+                hasSyntaxError = true;
             } catch (ParseException e) {
                 ErrorManager.addError(e, "main", null);
+                hasSyntaxError = true;
             } finally {
-                // Verifica erros de balanceamento durante tokenização
+                // Verifica erros de balanceamento durante tokenizacao
                 if (balanceException != null) {
                     hasBalanceError = true;
                     balanceErrorMsg = balanceException.getMessage();
                 } else {
-                    // Verifica o balanceamento no final, se não houve erro durante tokenização
+                    // Verifica o balanceamento no final, se nao houve erro durante tokenizacao
                     try {
                         delimiterBalancer.checkBalance();
                     } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
@@ -266,8 +282,44 @@ public class BrCompiler
                 System.out.println("ERRO DE BALANCEAMENTO: " + balanceErrorMsg);
             }
             
+            // ========== ANALISE SEMANTICA ==========
+            // So executa se nao houver erros sintaticos ou de balanceamento
+            boolean hasSemanticError = false;
+            
+            if (!ErrorManager.hasErrors() && !hasBalanceError && !hasSyntaxError) {
+                try {
+                    // Obtem a raiz da AST
+                    SimpleNode raiz = (SimpleNode) jjtree.rootNode();
+                    
+                    if (raiz != null) {
+                        System.out.println("\n--- Iniciando Analise Semantica ---");
+                        
+                        // Desativa modo debug para saida mais limpa (opcional)
+                        analisadorSemantico.setDebug(false);
+                        
+                        // Executa analise semantica
+                        analisadorSemantico.analisar(raiz);
+                        
+                        // Verifica se houve erros semanticos
+                        if (analisadorSemantico.temErros()) {
+                            hasSemanticError = true;
+                            System.out.println(analisadorSemantico.getRelatorioErros());
+                        }
+                        
+                        // Exibe tabela de simbolos (pode ser desabilitado em producao)
+                        // System.out.println(analisadorSemantico.getTabelaSimbolos().gerarRelatorio());
+                        
+                        System.out.println("--- Analise Semantica Concluida ---\n");
+                    }
+                } catch (Exception e) {
+                    System.out.println("ERRO durante analise semantica: " + e.getMessage());
+                    e.printStackTrace();
+                    hasSemanticError = true;
+                }
+            }
+            
             // Exibe resultado final
-            if (ErrorManager.hasErrors() || hasBalanceError) {
+            if (ErrorManager.hasErrors() || hasBalanceError || hasSemanticError) {
                 System.out.println("\nNOK.");
                 if (ErrorManager.hasErrors()) {
                     System.out.println(ErrorManager.getErrorReport());
@@ -339,14 +391,14 @@ public class BrCompiler
         System.out.println("    Ignorando o token: '" + im(tok.kind) + "'");
         ErrorManager.tokenConsumed();
         
-        // Processa delimitadores mesmo durante recuperação para manter balanceamento
+        // Processa delimitadores mesmo durante recuperacao para manter balanceamento
         if (tok.kind == ABREBLOCO || tok.kind == FECHABLOCO || 
             tok.kind == ABRIREXP || tok.kind == FECHAREXP) {
             try {
                 delimiterBalancer.processToken(tok.kind, tok.beginLine, tok.beginColumn);
             } catch (DelimiterBalancer.UnbalancedDelimiterException ex) {
-                // Durante recuperação, ignora erros de balanceamento temporários
-                // O balanceamento final será verificado no método main
+                // Durante recuperacao, ignora erros de balanceamento temporarios
+                // O balanceamento final sera verificado no metodo main
             }
         }
         
@@ -398,6 +450,36 @@ public class BrCompiler
 
     System.out.print(sb.toString());
   }
+  
+  // ========== METODOS AUXILIARES PARA ANALISE SEMANTICA ==========
+  
+  /**
+   * Obtem o analisador semantico atual
+   */
+  public static AnalisadorSemantico getAnalisadorSemantico() {
+    return analisadorSemantico;
+  }
+  
+  /**
+   * Obtem a tabela de simbolos atual
+   */
+  public static TabelaSimbolos getTabelaSimbolos() {
+    return analisadorSemantico.getTabelaSimbolos();
+  }
+  
+  /**
+   * Verifica se ha erros semanticos
+   */
+  public static boolean temErrosSemanticos() {
+    return analisadorSemantico.temErros();
+  }
+  
+  /**
+   * Obtem relatorio de erros semanticos
+   */
+  public static String getRelatorioSemantico() {
+    return analisadorSemantico.getRelatorioErros();
+  }
 
 }
 
@@ -412,8 +494,8 @@ TOKEN_MGR_DECLS :
                 parser.BrCompiler.delimiterBalancer.processToken(t.kind, t.beginLine, t.beginColumn);
             } catch (recovery.DelimiterBalancer.UnbalancedDelimiterException ex) {
                 // Durante o parsing, ignora erros de balanceamento
-                // Eles serão verificados no final pelo checkBalance()
-                // Isso evita falsos positivos durante recuperação de erro
+                // Eles serao verificados no final pelo checkBalance()
+                // Isso evita falsos positivos durante recuperacao de erro
             }
         }
     }
@@ -494,7 +576,7 @@ TOKEN: /*operacoes*/
  <OPOR: "|" >
 }
 
-void main() :
+void main() #main :
 { RecoverySet g = Follow.main; }
 {
   try { 
@@ -504,7 +586,7 @@ void main() :
   }
 }
 
-void bloco():
+void bloco() #bloco :
 { RecoverySet g = Follow.bloco; }
 {
     (
@@ -516,7 +598,7 @@ void bloco():
     )*
 }
 
-void comando():
+void comando() #comando :
 { RecoverySet g = Follow.comando; }
 {
    try {
@@ -533,7 +615,7 @@ void comando():
    }
 }
 
-void comandoIdentificador():
+void comandoIdentificador() #comandoIdentificador :
 { RecoverySet g = Follow.comandoIdentificador; }
 {
   try {
@@ -543,7 +625,7 @@ void comandoIdentificador():
   }
 }
 
-void comandoIdentificadorSufixo():
+void comandoIdentificadorSufixo() #comandoIdentificadorSufixo :
 { RecoverySet g = Follow.comandoIdentificadorSufixo; }
 {
   try {
@@ -559,7 +641,7 @@ void comandoIdentificadorSufixo():
   }
 }
 
-void sufixoExpressao():
+void sufixoExpressao() #sufixoExpressao :
 { RecoverySet g = Follow.sufixoExpressao; }
 {
   try {
@@ -569,7 +651,7 @@ void sufixoExpressao():
   }
 }
 
-void declaraVariavel():
+void declaraVariavel() #declaraVariavel :
 { RecoverySet g = Follow.declaraVariavel; }
 {
     try {
@@ -584,7 +666,7 @@ void declaraVariavel():
     }
 }
 
-void tipoDado():
+void tipoDado() #tipoDado :
 { RecoverySet g = Follow.tipoDado; }
 {
     try {
@@ -594,7 +676,7 @@ void tipoDado():
     }
 }
 
-void ListaIdentificadores():
+void ListaIdentificadores() #ListaIdentificadores :
 { RecoverySet g = Follow.listaIdentificadores; }
 {
     try {
@@ -604,7 +686,7 @@ void ListaIdentificadores():
     }
 }
 
-void ListaExpressoes():
+void ListaExpressoes() #ListaExpressoes :
 { RecoverySet g = Follow.listaExpressoes; }
 {
     try {
@@ -617,7 +699,7 @@ void ListaExpressoes():
     }
 }
 
-void Expressao():
+void Expressao() #Expressao :
 { RecoverySet g = Follow.expressao; }
 {
     try {
@@ -631,7 +713,7 @@ void Expressao():
     }
 }
 
-void fator(): 
+void fator() #fator : 
 { RecoverySet g = Follow.fator; }
 {
    try {
@@ -645,7 +727,7 @@ void fator():
    }
 }
 
-void termo(): 
+void termo() #termo : 
 { RecoverySet g = Follow.termo; }
 {
   try {
@@ -665,7 +747,7 @@ void termo():
   }
 }
 
-void termoIdentificadorSufixo():
+void termoIdentificadorSufixo() #termoIdentificadorSufixo :
 { RecoverySet g = Follow.termoIdentificadorSufixo; }
 {
   try {
@@ -676,7 +758,7 @@ void termoIdentificadorSufixo():
   }
 }
 
-void operadorLogico():
+void operadorLogico() #operadorLogico :
 { RecoverySet g = Follow.expressao; }
 {
   try {
@@ -686,7 +768,7 @@ void operadorLogico():
   }
 }
 
-void expressaoLogica():
+void expressaoLogica() #expressaoLogica :
 { RecoverySet g = Follow.expressao; }
 {
   try {
@@ -696,7 +778,7 @@ void expressaoLogica():
   }
 }
 
-void expressaoCondicional():
+void expressaoCondicional() #expressaoCondicional :
 { RecoverySet g = Follow.expressaoCondicional; }
 {
   try {
@@ -709,7 +791,7 @@ void expressaoCondicional():
   }
 }
 
-void condicao():
+void condicao() #condicao :
 { RecoverySet g = Follow.condicao; }
 {
   try {
@@ -719,7 +801,7 @@ void condicao():
   }
 }
 
-void print():
+void print() #print :
 { RecoverySet g = Follow.print; }
 {
     try {
@@ -729,7 +811,7 @@ void print():
     }
 }
 
-void scan():
+void scan() #scan :
 { RecoverySet g = Follow.scan; }
 {
    try {
@@ -739,7 +821,7 @@ void scan():
    }
 }
 
-void whileLoop():
+void whileLoop() #whileLoop :
 { RecoverySet g = Follow.whileLoop; }
 {
     try {
@@ -750,7 +832,7 @@ void whileLoop():
     }
 }
 
-void forLoop():
+void forLoop() #forLoop :
 { RecoverySet g = Follow.forLoop; }
 {
   try {
@@ -767,7 +849,7 @@ void forLoop():
   }
 }
 
-void atribuicaoFor():
+void atribuicaoFor() #atribuicaoFor :
 { RecoverySet g = Follow.atribuicaoFor; }
 {
   try {
@@ -777,7 +859,7 @@ void atribuicaoFor():
   }
 }
 
-void declaraFuncao():
+void declaraFuncao() #declaraFuncao :
 { RecoverySet g = Follow.declaraFuncao; }
 {
  try {
@@ -788,7 +870,7 @@ void declaraFuncao():
  }
 }
 
-void listaParametros():
+void listaParametros() #listaParametros :
 { RecoverySet g = Follow.listaParametros; }
 {
   try {
@@ -798,7 +880,7 @@ void listaParametros():
   }
 }
 
-void parametro():
+void parametro() #parametro :
 { RecoverySet g = Follow.parametro; }
 {
   try {
@@ -808,7 +890,7 @@ void parametro():
   }
 }
 
-void retorno():
+void retorno() #retorno :
 { RecoverySet g = Follow.retorno; }
 {
     try {
@@ -818,7 +900,7 @@ void retorno():
     }
 }
 
-void tipoLista():
+void tipoLista() #tipoLista :
 { RecoverySet g = Follow.tipoLista; }
 {
   try {
@@ -828,7 +910,7 @@ void tipoLista():
   }
 }
 
-void inicializacaoLista():
+void inicializacaoLista() #inicializacaoLista :
 { RecoverySet g = Follow.inicializacaoLista; }
 {
   try {
@@ -838,7 +920,7 @@ void inicializacaoLista():
   }
 }
 
-void tipoPilha():
+void tipoPilha() #tipoPilha :
 { RecoverySet g = Follow.tipoPilha; }
 {
   try {
