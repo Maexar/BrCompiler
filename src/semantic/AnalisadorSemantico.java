@@ -235,68 +235,86 @@ public class AnalisadorSemantico {
     /**
      * Analisa uma declaracao de variavel
      */
-    private void analisarDeclaracaoVariavel(SimpleNode no) {
-        if (debug) System.out.println("[AnalisadorSemantico] Analisando declaracao de variavel");
-        
-        // Estrutura: tipoDado listaIdentificadores (receba listaExpressoes)?
-        TipoSemantico tipo = TipoSemantico.INDEFINIDO;
-        List<String> identificadores = new ArrayList<>();
-        List<TipoSemantico> tiposExpressoes = new ArrayList<>();
-        boolean temAtribuicao = false;
-        
-        int numFilhos = no.jjtGetNumChildren();
-        
-        // Primeiro filho deve ser tipoDado
-        if (numFilhos > 0) {
-            SimpleNode tipoNo = (SimpleNode) no.jjtGetChild(0);
-            if (tipoNo.getId() == BrCompilerTreeConstants.JJTTIPODADO) {
-                tipo = extrairTipoDado(tipoNo);
-            }
-        }
-        
-        // Segundo filho deve ser listaIdentificadores
-        if (numFilhos > 1) {
-            SimpleNode listaId = (SimpleNode) no.jjtGetChild(1);
-            if (listaId.getId() == BrCompilerTreeConstants.JJTLISTAIDENTIFICADORES) {
-                identificadores = extrairIdentificadores(listaId);
-            }
-        }
-        
-        // Terceiro filho (se existir) deve ser listaExpressoes (atribuicao)
-        if (numFilhos > 2) {
-            SimpleNode listaExpr = (SimpleNode) no.jjtGetChild(2);
-            if (listaExpr.getId() == BrCompilerTreeConstants.JJTLISTAEXPRESSOES) {
-                temAtribuicao = true;
-                tiposExpressoes = analisarListaExpressoes(listaExpr);
-            }
-        }
-        
-        Token token = obterPrimeiroToken(no);
-        int linha = token != null ? token.beginLine : 0;
-        int coluna = token != null ? token.beginColumn : 0;
-        
-        // Insere cada identificador na tabela de simbolos
-        for (int i = 0; i < identificadores.size(); i++) {
-            String nome = identificadores.get(i);
-            
-            // Verifica se ja existe no escopo atual
-            if (tabelaSimbolos.existeNoEscopoAtual(nome)) {
-                adicionarErro(ErroSemantico.variavelJaDeclarada(nome, linha, coluna));
-                continue;
-            }
-            
-            // Verifica compatibilidade de tipos se houver atribuicao
-            if (temAtribuicao && i < tiposExpressoes.size()) {
-                TipoSemantico tipoExpr = tiposExpressoes.get(i);
-                if (!TipoSemantico.saoCompativeis(tipo, tipoExpr)) {
-                    adicionarErro(ErroSemantico.atribuicaoInvalida(nome, tipo, tipoExpr, linha, coluna));
-                }
-                tabelaSimbolos.inserirVariavelInicializada(nome, tipo, linha, coluna);
-            } else {
-                tabelaSimbolos.inserirVariavel(nome, tipo, linha, coluna);
-            }
+ private void analisarDeclaracaoVariavel(SimpleNode no) {
+    if (debug) System.out.println("[AnalisadorSemantico] Analisando declaracao de variavel");
+    
+    // Estrutura: tipoDado listaIdentificadores (receba listaExpressoes)?
+    TipoSemantico tipo = TipoSemantico.INDEFINIDO;
+    List<String> identificadores = new ArrayList<>();
+    List<TipoSemantico> tiposExpressoes = new ArrayList<>();
+    boolean temAtribuicao = false;
+    
+    int numFilhos = no.jjtGetNumChildren();
+    
+    // Primeiro filho deve ser tipoDado
+    if (numFilhos > 0) {
+        SimpleNode tipoNo = (SimpleNode) no.jjtGetChild(0);
+        if (tipoNo.getId() == BrCompilerTreeConstants.JJTTIPODADO) {
+            tipo = extrairTipoDado(tipoNo);
         }
     }
+    
+    // Segundo filho deve ser listaIdentificadores
+    if (numFilhos > 1) {
+        SimpleNode listaId = (SimpleNode) no.jjtGetChild(1);
+        if (listaId.getId() == BrCompilerTreeConstants.JJTLISTAIDENTIFICADORES) {
+            identificadores = extrairIdentificadores(listaId);
+        }
+    }
+    
+    // Terceiro filho (se existir) deve ser listaExpressoes (atribuicao)
+    if (numFilhos > 2) {
+        SimpleNode listaExpr = (SimpleNode) no.jjtGetChild(2);
+        if (listaExpr.getId() == BrCompilerTreeConstants.JJTLISTAEXPRESSOES) {
+            temAtribuicao = true;
+            tiposExpressoes = analisarListaExpressoes(listaExpr);
+        }
+    }
+    
+    Token token = obterPrimeiroToken(no);
+    int linha = token != null ? token.beginLine : 0;
+    int coluna = token != null ? token.beginColumn : 0;
+    
+    // **CORREÇÃO AQUI**: Remove duplicatas antes de processar
+    List<String> identificadoresUnicos = new ArrayList<>();
+    java.util.Set<String> vistos = new java.util.HashSet<>();
+    
+    for (String nome : identificadores) {
+        if (!vistos.contains(nome)) {
+            identificadoresUnicos.add(nome);
+            vistos.add(nome);
+        } else {
+            // Duplicata detectada na mesma declaracao
+            adicionarErro(new ErroSemantico(
+                ErroSemantico.TipoErro.VARIAVEL_JA_DECLARADA,
+                "Identificador '" + nome + "' declarado mais de uma vez na mesma instrucao",
+                linha, coluna
+            ));
+        }
+    }
+    
+    // Insere cada identificador UNICO na tabela de simbolos
+    for (int i = 0; i < identificadoresUnicos.size(); i++) {
+        String nome = identificadoresUnicos.get(i);
+        
+        // Verifica se ja existe no escopo atual
+        if (tabelaSimbolos.existeNoEscopoAtual(nome)) {
+            adicionarErro(ErroSemantico.variavelJaDeclarada(nome, linha, coluna));
+            continue; // **IMPORTANTE**: Não tenta inserir novamente
+        }
+        
+        // Verifica compatibilidade de tipos se houver atribuicao
+        if (temAtribuicao && i < tiposExpressoes.size()) {
+            TipoSemantico tipoExpr = tiposExpressoes.get(i);
+            if (!TipoSemantico.saoCompativeis(tipo, tipoExpr)) {
+                adicionarErro(ErroSemantico.atribuicaoInvalida(nome, tipo, tipoExpr, linha, coluna));
+            }
+            tabelaSimbolos.inserirVariavelInicializada(nome, tipo, linha, coluna);
+        } else {
+            tabelaSimbolos.inserirVariavel(nome, tipo, linha, coluna);
+        }
+    }
+}
     
     /**
      * Analisa uma declaracao de funcao (segunda passada - corpo da funcao)
@@ -1103,19 +1121,25 @@ public class AnalisadorSemantico {
     /**
      * Extrai lista de identificadores de um no
      */
-    private List<String> extrairIdentificadores(SimpleNode no) {
-        List<String> identificadores = new ArrayList<>();
-        
-        Token token = obterPrimeiroToken(no);
-        while (token != null) {
-            if (token.kind == parser.BrCompilerConstants.IDENTIFICADOR) {
-                identificadores.add(token.image);
-            }
-            token = token.next;
+private List<String> extrairIdentificadores(SimpleNode no) {
+    List<String> identificadores = new ArrayList<>();
+    
+    // Busca apenas no escopo do nó ListaIdentificadores
+    Token token = obterPrimeiroToken(no);
+    
+    // Percorre apenas até encontrar algo que não seja identificador ou vírgula
+    while (token != null) {
+        if (token.kind == parser.BrCompilerConstants.IDENTIFICADOR) {
+            identificadores.add(token.image);
+        } else if (token.kind != parser.BrCompilerConstants.VIRGULA) {
+            // Qualquer outro token indica fim da lista de identificadores
+            break;
         }
-        
-        return identificadores;
+        token = token.next;
     }
+    
+    return identificadores;
+}
     
     /**
      * Busca um identificador nos tokens do no
