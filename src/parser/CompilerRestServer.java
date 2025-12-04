@@ -87,7 +87,7 @@ public class CompilerRestServer {
             }
         });
         
-        // ===== ENDPOINT: TABELA DE SIMBOLOS =====
+        // ===== NOVO ENDPOINT: TABELA DE SIMBOLOS =====
         server.createContext("/api/symbols", exchange -> {
             if ("OPTIONS".equals(exchange.getRequestMethod())) {
                 handleCORS(exchange);
@@ -129,7 +129,6 @@ public class CompilerRestServer {
             String code = extractCode(body);
             
             System.out.println("[DEBUG] Codigo recebido para compilacao");
-            System.out.println("[DEBUG] Tamanho do codigo: " + code.length() + " caracteres");
             
             String result = compileCode(code);
             
@@ -181,7 +180,7 @@ public class CompilerRestServer {
         }
     }
     
-    // ===== HANDLER: TABELA DE SIMBOLOS =====
+    // ===== NOVO HANDLER: TABELA DE SIMBOLOS =====
     private static void handleSymbols(HttpExchange exchange) {
         try {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -260,7 +259,6 @@ public class CompilerRestServer {
                 // Coleta erros sintaticos
                 if (ErrorManager.hasErrors()) {
                     syntaxErrors.addAll(ErrorManager.getErrors());
-                    System.out.println("[DEBUG] Erros sintaticos coletados: " + syntaxErrors.size());
                 }
                 
                 // Verifica balanceamento
@@ -298,8 +296,6 @@ public class CompilerRestServer {
                         System.out.println("[SEMANTIC] Erro durante analise semantica: " + e.getMessage());
                         e.printStackTrace();
                     }
-                } else {
-                    System.out.println("[SEMANTIC] Analise semantica PULADA devido a erros sintaticos");
                 }
                 
                 // ===== MONTA RESPOSTA =====
@@ -317,8 +313,6 @@ public class CompilerRestServer {
                 int numVariaveis = tabela.getVariaveis().size();
                 int numFuncoes = tabela.getFuncoes().size();
                 
-                System.out.println("[DEBUG] Tabela de simbolos: " + numVariaveis + " variavel(is), " + numFuncoes + " funcao(oes)");
-                
                 return "{\"success\":true,\"message\":\"Codigo compilado com sucesso\"," +
                        "\"lines\":" + countLines(code) + "," +
                        "\"symbols\":{\"variables\":" + numVariaveis + ",\"functions\":" + numFuncoes + "}}";
@@ -330,12 +324,10 @@ public class CompilerRestServer {
                 
                 if (ErrorManager.hasErrors()) {
                     allErrors.addAll(ErrorManager.getErrors());
-                    System.out.println("[DEBUG] Erros coletados do ErrorManager: " + allErrors.size());
                 } else {
                     String errorMsg = BrCompiler.handleParseError(e);
                     ErrorManager.SyntaxError parseError = extractErrorFromMessage(errorMsg, "parseException");
                     allErrors.add(parseError);
-                    System.out.println("[DEBUG] Erro ParseException adicionado manualmente");
                 }
                 
                 return buildFullErrorsResponse(allErrors, new ArrayList<>());

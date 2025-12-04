@@ -70,118 +70,165 @@ public class ErrorManager {
         }
     }
 
-    public static void addError(ParseException e, String context, RecoverySet recoverySet) {
-        if (e == null) return;
+public static void addError(ParseException e, String context, RecoverySet recoverySet) {
+    if (e == null) return;
 
-        String foundToken = "";
-        int line = 0;
-        int column = 0;
+    String foundToken = "";
+    int line = 0;
+    int column = 0;
+    boolean tokenFaltando = false;
 
-        if (e.currentToken != null && e.currentToken.next != null) {
-            foundToken = e.currentToken.next.image;
-            line = e.currentToken.next.beginLine;
-            column = e.currentToken.next.beginColumn;
-        } else if (e.currentToken != null) {
-            foundToken = e.currentToken.image;
-            line = e.currentToken.beginLine;
-            column = e.currentToken.beginColumn;
-        }
-
-        String expectedTokens = "";
-        if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < e.expectedTokenSequences.length; i++) {
-                if (i > 0) sb.append(" ou ");
-                int[] seq = e.expectedTokenSequences[i];
-                for (int j = 0; j < seq.length; j++) {
-                    if (j > 0) sb.append(" ");
-                    sb.append("'").append(parser.BrCompiler.obterTokenPortugues(seq[j])).append("'");
-                }
-            }
-            expectedTokens = sb.toString();
-        }
-
-        String errorMessage = gerarMensagemErro(context, foundToken, expectedTokens);
+    // **NOVO**: Detecta se é um token faltando vs token inesperado
+    if (e.currentToken != null && e.currentToken.next != null) {
+        foundToken = e.currentToken.next.image;
         
-        SyntaxError newError = new SyntaxError(
-            errorMessage,
-            line,
-            column,
-            context,
-            foundToken,
-            expectedTokens
-        );
+        // Verifica se o próximo token está em linha diferente
+        // Isso indica que falta algo no final da linha anterior
+        if (e.currentToken.next.beginLine > e.currentToken.endLine) {
+            tokenFaltando = true;
+        }
+    }
 
-        System.out.println("[ErrorManager] addError chamado - context: " + context + 
-                          ", recoveryInProgress: " + recoveryInProgress);
+    // **CORRIGIDO**: Calcula posição correta
+    if (tokenFaltando && e.currentToken != null) {
+        // Token faltando: reporta APÓS último token válido
+        line = e.currentToken.endLine;
+        column = e.currentToken.endColumn + 1;
+        
+        System.out.println("[ErrorManager] Token faltando detectado");
+        System.out.println("  Ultimo token valido: '" + e.currentToken.image + 
+                          "' [linha " + e.currentToken.endLine + 
+                          ", col " + e.currentToken.endColumn + "]");
+        System.out.println("  Proximo token: '" + foundToken + 
+                          "' [linha " + e.currentToken.next.beginLine + 
+                          ", col " + e.currentToken.next.beginColumn + "]");
+        System.out.println("  Posicao reportada: [linha " + line + ", col " + column + "]");
+        
+    } else if (e.currentToken != null && e.currentToken.next != null) {
+        // Token inesperado: reporta posição do token encontrado
+        foundToken = e.currentToken.next.image;
+        line = e.currentToken.next.beginLine;
+        column = e.currentToken.next.beginColumn;
+    } else if (e.currentToken != null) {
+        foundToken = e.currentToken.image;
+        line = e.currentToken.beginLine;
+        column = e.currentToken.beginColumn;
+    }
 
-        // FILTRO 1: Ignora erros em cascata (linha 0, coluna 0)
-        if (newError.isCascadingError()) {
-            System.out.println("[ErrorManager] Erro em cascata IGNORADO (linha 0): " + errorMessage);
+    String expectedTokens = "";
+    if (e.expectedTokenSequences != null && e.expectedTokenSequences.length > 0) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < e.expectedTokenSequences.length; i++) {
+            if (i > 0) sb.append(" ou ");
+            int[] seq = e.expectedTokenSequences[i];
+            for (int j = 0; j < seq.length; j++) {
+                if (j > 0) sb.append(" ");
+                sb.append("'").append(parser.BrCompiler.obterTokenPortugues(seq[j])).append("'");
+            }
+        }
+        expectedTokens = sb.toString();
+    }
+
+    String errorMessage = gerarMensagemErro(context, foundToken, expectedTokens, tokenFaltando);
+    
+    SyntaxError newError = new SyntaxError(
+        errorMessage,
+        line,
+        column,
+        context,
+        foundToken,
+        expectedTokens
+    );
+
+    System.out.println("[ErrorManager] addError chamado - context: " + context + 
+                      ", recoveryInProgress: " + recoveryInProgress);
+
+    // FILTRO 1: Ignora erros em cascata (linha 0, coluna 0)
+    if (newError.isCascadingError()) {
+        System.out.println("[ErrorManager] Erro em cascata IGNORADO (linha 0): " + errorMessage);
+        return;
+    }
+    
+    // FILTRO 2: Ignora duplicatas (mesma posicao e token)
+    if (!errors.isEmpty()) {
+        SyntaxError lastError = errors.get(errors.size() - 1);
+        if (newError.isDuplicateOf(lastError)) {
+            System.out.println("[ErrorManager] Erro duplicado IGNORADO: " + errorMessage);
             return;
         }
-        
-        // FILTRO 2: Ignora duplicatas (mesma posicao e token)
-        if (!errors.isEmpty()) {
-            SyntaxError lastError = errors.get(errors.size() - 1);
-            if (newError.isDuplicateOf(lastError)) {
-                System.out.println("[ErrorManager] Erro duplicado IGNORADO: " + errorMessage);
-                return;
-            }
-        }
-
-        errors.add(newError);
-        System.out.println("[ErrorManager] ERRO ADICIONADO: " + errorMessage + 
-                          " [linha " + line + ", col " + column + "]");
-        System.out.println("[ErrorManager] Total de erros agora: " + errors.size());
     }
 
-    private static String gerarMensagemErro(String context, String foundToken, String expectedTokens) {
+    errors.add(newError);
+    System.out.println("[ErrorManager] ERRO ADICIONADO: " + errorMessage + 
+                      " [linha " + line + ", col " + column + "]");
+    System.out.println("[ErrorManager] Total de erros agora: " + errors.size());
+}
+
+private static String gerarMensagemErro(String context, String foundToken, 
+                                        String expectedTokens, boolean tokenFaltando) {
+    // **NOVO**: Mensagem diferente quando token está faltando
+    if (tokenFaltando) {
         switch (context) {
-            case "main":
-                if (foundToken.equals("EOF")) {
-                    return "Bloco nao fechado - faltou fecha-te-sesamo";
-                }
-                return "Erro sintatico em main";
-                
             case "declaraVariavel":
-                return "Declaracao de variavel invalida";
-                
-            case "expressaoCondicional":
-            case "condicao":
-                return "Estrutura condicional malformada";
-                
+                return "Faltou 'br' para finalizar declaracao de variavel";
             case "print":
-                return "Comando printa invalido";
-                
+                return "Faltou 'br' para finalizar comando printa";
             case "scan":
-                return "Comando papa-entrada invalido";
-                
-            case "whileLoop":
-                return "Estrutura de repeticao repet invalida";
-                
-            case "forLoop":
-                return "Estrutura de repeticao pet invalida";
-                
-            case "declaraFuncao":
-                return "Declaracao de funcao vai-filhao invalida";
-                
+                return "Faltou 'br' para finalizar comando papa-entrada";
             case "comandoIdentificador":
-                return "Comando identificador invalido";
-                
             case "comandoIdentificadorSufixo":
-                return "Comando invalido apos identificador";
-                
-            case "comando":
-                return "Comando invalido";
-                
-            case "bloco":
-                return "Bloco de comandos malformado";
-                
+                return "Faltou 'br' para finalizar comando";
             default:
-                return "Erro sintatico em " + context;
+                return "Token faltando em " + context;
         }
     }
+    
+    // Mensagens originais para tokens inesperados
+    switch (context) {
+        case "main":
+            if (foundToken.equals("EOF")) {
+                return "Bloco nao fechado - faltou fecha-te-sesamo";
+            }
+            return "Erro sintatico em main";
+            
+        case "declaraVariavel":
+            return "Declaracao de variavel invalida";
+            
+        case "expressaoCondicional":
+        case "condicao":
+            return "Estrutura condicional malformada";
+            
+        case "print":
+            return "Comando printa invalido";
+            
+        case "scan":
+            return "Comando papa-entrada invalido";
+            
+        case "whileLoop":
+            return "Estrutura de repeticao repet invalida";
+            
+        case "forLoop":
+            return "Estrutura de repeticao pet invalida";
+            
+        case "declaraFuncao":
+            return "Declaracao de funcao vai-filhao invalida";
+            
+        case "comandoIdentificador":
+            return "Comando identificador invalido";
+            
+        case "comandoIdentificadorSufixo":
+            return "Comando invalido apos identificador";
+            
+        case "comando":
+            return "Comando invalido";
+            
+        case "bloco":
+            return "Bloco de comandos malformado";
+            
+        default:
+            return "Erro sintatico em " + context;
+    }
+}
 
     public static void startRecovery() {
         recoveryInProgress = true;
