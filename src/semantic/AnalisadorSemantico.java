@@ -415,65 +415,71 @@ public class AnalisadorSemantico {
     /**
      * Analisa o sufixo de um comando identificador (atribuicao, chamada, etc)
      */
-    private void analisarComandoIdentificadorSufixo(SimpleNode no, Simbolo simbolo, int linha, int coluna) {
-        if (no == null) return;
-        
-        // Verifica tokens para determinar tipo de operacao
-        Token token = obterPrimeiroToken(no);
-        
-        // Analisa filhos para expressoes
-        int numFilhos = no.jjtGetNumChildren();
-        
-        // Se for atribuicao (receba)
-        if (temTokenAtribuicao(no)) {
-            if (simbolo.isFuncao()) {
-                adicionarErro(ErroSemantico.identificadorNaoEVariavel(simbolo.getNome(), linha, coluna));
-                return;
-            }
-            
-            // Verifica tipo da expressao
-            for (int i = 0; i < numFilhos; i++) {
-                SimpleNode filho = (SimpleNode) no.jjtGetChild(i);
-                if (filho.getId() == BrCompilerTreeConstants.JJTEXPRESSAO) {
-                    TipoSemantico tipoExpr = analisarExpressao(filho);
-                    if (!TipoSemantico.saoCompativeis(simbolo.getTipo(), tipoExpr)) {
-                        adicionarErro(ErroSemantico.atribuicaoInvalida(
-                            simbolo.getNome(), simbolo.getTipo(), tipoExpr, linha, coluna));
-                    }
-                    simbolo.setInicializado(true);
-                    break;
-                }
-            }
+   private void analisarComandoIdentificadorSufixo(SimpleNode no, Simbolo simbolo, int linha, int coluna) {
+    if (no == null) return;
+    
+    // Verifica tokens para determinar tipo de operacao
+    Token token = obterPrimeiroToken(no);
+    
+    // Analisa filhos para expressoes
+    int numFilhos = no.jjtGetNumChildren();
+    
+    // **PRIORIDADE 1**: Operacoes de lista (recrutar, expulsar)
+    if (temOperacaoLista(no)) {
+        if (!simbolo.getTipo().isLista()) {
+            adicionarErro(ErroSemantico.identificadorNaoELista(simbolo.getNome(), linha, coluna));
+            return;
         }
-        // Se for chamada de funcao
-        else if (temChamadaFuncao(no)) {
-            if (!simbolo.isFuncao()) {
-                adicionarErro(ErroSemantico.identificadorNaoEFuncao(simbolo.getNome(), linha, coluna));
-                return;
-            }
-            
-            analisarChamadaFuncao(no, simbolo, linha, coluna);
-        }
-        // Se for operacao de lista (recrutar, expulsar)
-        else if (temOperacaoLista(no)) {
-            if (!simbolo.getTipo().isLista()) {
-                adicionarErro(ErroSemantico.identificadorNaoELista(simbolo.getNome(), linha, coluna));
-                return;
-            }
-            analisarOperacaoLista(no, simbolo, linha, coluna);
-        }
-        // Se for operacao de pilha (montar-sanduba, comer-sanduba)
-        else if (temOperacaoPilha(no)) {
-            if (!simbolo.getTipo().isPilha()) {
-                adicionarErro(ErroSemantico.identificadorNaoEPilha(simbolo.getNome(), linha, coluna));
-                return;
-            }
-            analisarOperacaoPilha(no, simbolo, linha, coluna);
-        }
-        
-        // Analisa outros filhos
-        analisarFilhos(no);
+        analisarOperacaoLista(no, simbolo, linha, coluna);
+        return; // IMPORTANTE: retorna para não cair em outras verificações
     }
+    
+    // **PRIORIDADE 2**: Operacoes de pilha (montar-sanduba, comer-sanduba)
+    if (temOperacaoPilha(no)) {
+        if (!simbolo.getTipo().isPilha()) {
+            adicionarErro(ErroSemantico.identificadorNaoEPilha(simbolo.getNome(), linha, coluna));
+            return;
+        }
+        analisarOperacaoPilha(no, simbolo, linha, coluna);
+        return; // IMPORTANTE: retorna para não cair em outras verificações
+    }
+    
+    // **PRIORIDADE 3**: Chamada de funcao (tem parenteses)
+    if (temChamadaFuncao(no)) {
+        if (!simbolo.isFuncao()) {
+            adicionarErro(ErroSemantico.identificadorNaoEFuncao(simbolo.getNome(), linha, coluna));
+            return;
+        }
+        analisarChamadaFuncao(no, simbolo, linha, coluna);
+        return; // IMPORTANTE: retorna para não cair em outras verificações
+    }
+    
+    // **PRIORIDADE 4**: Atribuicao generica (receba)
+    if (temTokenAtribuicao(no)) {
+        if (simbolo.isFuncao()) {
+            adicionarErro(ErroSemantico.identificadorNaoEVariavel(simbolo.getNome(), linha, coluna));
+            return;
+        }
+        
+        // Verifica tipo da expressao
+        for (int i = 0; i < numFilhos; i++) {
+            SimpleNode filho = (SimpleNode) no.jjtGetChild(i);
+            if (filho.getId() == BrCompilerTreeConstants.JJTEXPRESSAO) {
+                TipoSemantico tipoExpr = analisarExpressao(filho);
+                if (!TipoSemantico.saoCompativeis(simbolo.getTipo(), tipoExpr)) {
+                    adicionarErro(ErroSemantico.atribuicaoInvalida(
+                        simbolo.getNome(), simbolo.getTipo(), tipoExpr, linha, coluna));
+                }
+                simbolo.setInicializado(true);
+                break;
+            }
+        }
+        return; // IMPORTANTE: retorna após processar
+    }
+    
+    // Se nenhuma das verificações acima passou, analisa filhos genericamente
+    analisarFilhos(no);
+}
     
     /**
      * Analisa expressao condicional (sepa)
