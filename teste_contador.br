@@ -1,0 +1,10 @@
+gambiarra abre-te-sesamo
+  stonks contador receba 1 br
+  printa contador br
+  contador receba contador + 1 br
+  printa contador br
+  contador receba contador + 1 br
+  printa contador br
+  contador receba contador * 10 br
+  printa contador br
+fecha-te-sesamo

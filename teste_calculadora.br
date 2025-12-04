@@ -1,0 +1,12 @@
+gambiarra abre-te-sesamo
+  stonks a receba 50 br
+  stonks b receba 30 br
+  stonks adicao receba a + b br
+  stonks subtracao receba a - b br
+  stonks multiplicacao receba a * b br
+  stonks divisao receba a / b br
+  printa adicao br
+  printa subtracao br
+  printa multiplicacao br
+  printa divisao br
+fecha-te-sesamo

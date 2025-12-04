@@ -1,0 +1,9 @@
+gambiarra abre-te-sesamo
+  stonks x receba 5 br
+  stonks y receba 3 br
+  stonks z receba 2 br
+  stonks resultado receba x * y + z br
+  printa resultado br
+  resultado receba x + y * z br
+  printa resultado br
+fecha-te-sesamo
